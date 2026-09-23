@@ -247,6 +247,7 @@ def _prod_settings(**overrides):
         SUPABASE_URL="https://realproject.supabase.co",
         SUPABASE_JWT_SECRET="a-real-secret",
         SUPABASE_DB_URL="postgresql+psycopg://u:p@db.real.supabase.co:5432/postgres",
+        AI_PROVIDER="anthropic",
         ANTHROPIC_API_KEY="sk-ant-real-key",
         BACKEND_CORS_ORIGINS=["https://app.example.com"],
         SCHEDULER_ENABLED=False,
@@ -273,15 +274,21 @@ def test_prod_guard_blocks_sqlite():
 
 
 def test_prod_guard_blocks_test_ai_key():
-    s = _prod_settings(ANTHROPIC_API_KEY="sk-ant-test-key")
+    s = _prod_settings(AI_PROVIDER="anthropic", ANTHROPIC_API_KEY="sk-ant-test-key")
     with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
         s.assert_production_ready()
 
 
-def test_prod_guard_blocks_default_cors():
+def test_prod_guard_allows_bedrock_without_anthropic_key():
+    s = _prod_settings(AI_PROVIDER="bedrock", ANTHROPIC_API_KEY="")
+    s.assert_production_ready()  # Bedrock authenticates differently — no error
+
+
+def test_prod_guard_warns_but_does_not_block_default_cors():
+    # CORS misconfig blocks browsers but is not a security/data risk, and the
+    # frontend domain may not exist yet at first deploy — warn, don't crash.
     s = _prod_settings(BACKEND_CORS_ORIGINS=["http://localhost:3000"])
-    with pytest.raises(RuntimeError, match="CORS"):
-        s.assert_production_ready()
+    s.assert_production_ready()  # must NOT raise
 
 
 def test_prod_guard_blocks_placeholder_jwt_secret():
