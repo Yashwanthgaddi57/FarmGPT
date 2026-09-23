@@ -35,13 +35,17 @@ services:
       # postgresql+psycopg://postgres.isuzdemiozvhbszwaxhs:PASSWORD@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres
       - key: SUPABASE_DB_URL
         sync: false            # secret (contains DB password) — prompted at deploy
-      # ── AI ──
+      # ── AI (Bedrock — matches local .env) ──
       - key: AI_PROVIDER
-        value: anthropic
-      - key: ANTHROPIC_API_KEY
+        value: bedrock
+      - key: BEDROCK_API_KEY
         sync: false            # secret — prompted at deploy
-      - key: ANTHROPIC_MODEL
-        value: claude-sonnet-4-5-20250929
+      - key: BEDROCK_REGION
+        value: us-east-1
+      - key: BEDROCK_MODEL_ID
+        value: us.anthropic.claude-sonnet-5
+      - key: ANTHROPIC_API_KEY
+        sync: false            # optional fallback — leave empty unless you have one
       # ── Infra ──
       # Redis is optional (in-memory cache fallback is automatic). Add a free
       # Redis later (Render/Upstash) and set REDIS_URL to share cache+rate limits.
