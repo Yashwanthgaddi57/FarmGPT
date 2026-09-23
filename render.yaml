@@ -51,8 +51,9 @@ services:
       # Redis later (Render/Upstash) and set REDIS_URL to share cache+rate limits.
       - key: SCHEDULER_ENABLED
         value: "true"
+      # pydantic-settings parses complex fields as JSON first — must be an array.
       - key: BACKEND_CORS_ORIGINS
-        value: http://localhost:3000
+        value: '["http://localhost:3000"]'
       - key: SENTRY_DSN
         sync: false
       - key: VAPID_PUBLIC_KEY
