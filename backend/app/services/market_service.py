@@ -1,0 +1,302 @@
+"""Market intelligence service (location-aware).
+
+Price data priority chain:
+  1. Real Agmarknet modal prices (data.gov.in) when DATA_GOV_API_KEY is set —
+     location-aware (market > district > state > national), freshness-checked,
+     cached 6h per location key.
+  2. Deterministic synthetic baseline (documented heuristic) when the feed is
+     unavailable, the crop is unknown to the mapping, or the newest real record
+     is stale beyond FRESHNESS_DAYS.
+
+When the farmer has coordinates, the analysis is anchored to their real
+nearest APMC mandis (from the seeded directory) and the exact coordinates are
+passed to the AI, which sharpens seasonal/timing advice for their area.
+"""
+import logging
+import uuid
+from datetime import date, timedelta
+
+from sqlalchemy.orm import Session
+
+from app.ai.claude_client import get_claude
+from app.ai.prompts import MARKET_FORECAST_SYSTEM
+from app.core.cache import cache_get, cache_set
+from app.core.config import settings
+from app.core.exceptions import AIError
+from app.models.market_prediction import MarketPrediction
+from app.models.mandi import Mandi
+from app.schemas.ai_features import MarketPredictionRequest
+from app.services import agmarknet_client, agmarknet_scraper
+from app.services.geo_service import haversine_km
+
+logger = logging.getLogger("app.services.market")
+
+# Deterministic fallback baseline — used only when the real Agmarknet feed is
+# unavailable (no DATA_GOV_API_KEY, network failure, or stale data).
+BASE_PRICES: dict[str, int] = {
+    "wheat": 2400, "rice": 2200, "paddy": 2100, "cotton": 6800, "sugarcane": 340,
+    "maize": 2022, "soybean": 4600, "onion": 1600, "potato": 1200, "tomato": 1400,
+    "gram": 5400, "chickpea": 5400, "mustard": 5100, "groundnut": 5800,
+    "turmeric": 9500, "chilli": 12500, "cumin": 22000, "banana": 1500,
+    "mango": 3200, "guava": 2400, "barley": 2100, "bajra": 2300, "jowar": 2900,
+}
+
+
+def synthetic_price_history(crop: str, days: int = 90) -> list[dict]:
+    """Deterministic seeded walk around the crop's base price for history context."""
+    import hashlib
+    import math
+
+    base = BASE_PRICES.get(crop.lower().strip(), 2500)
+    out = []
+    for d in range(days, -1, -1):
+        day = date.today() - timedelta(days=d)
+        seed = int(hashlib.sha256(f"{crop}:{day.isoformat()}".encode()).hexdigest()[:8], 16)
+        wave = math.sin(seed % 360) * 0.04 + ((seed % 100) / 100 - 0.5) * 0.03
+        price = round(base * (1 + wave), 2)
+        out.append({"date": day.isoformat(), "price": price})
+    return out
+
+
+def _weekly_series(history: list[dict], weeks: int = 8) -> list[dict]:
+    """Downsample daily history to one point per week: 8 numbers, not 45 lines."""
+    series = []
+    for i in range(0, len(history), 7):
+        chunk = history[i : i + 7]
+        if chunk:
+            series.append(
+                {
+                    "date": chunk[0]["date"],
+                    "price": round(sum(p["price"] for p in chunk) / len(chunk), 2),
+                }
+            )
+    return series[-weeks:]
+
+
+def _trend_pct(current: float, past: float) -> float:
+    if not past:
+        return 0.0
+    return round((current - past) / past * 100, 2)
+
+
+def _heuristic_analysis(crop: str, history: list[dict]) -> dict:
+    """Deterministic fallback so the feature always returns a usable analysis."""
+    current = history[-1]["price"]
+    week_ago = history[-8]["price"] if len(history) >= 8 else current
+    month_ago = history[-30]["price"] if len(history) >= 30 else current
+    quarter_ago = history[0]["price"] if history else current
+
+    w = _trend_pct(current, week_ago)
+    m = _trend_pct(current, month_ago)
+    q = _trend_pct(current, quarter_ago)
+    momentum = w + m * 0.5
+
+    if momentum <= -3:
+        rec = "sell_now"
+        reasoning = (
+            f"Prices are sliding (weekly {w:+.1f}%, monthly {m:+.1f}%). Selling now avoids "
+            f"further erosion; storage will not recover the trend within two weeks."
+        )
+    elif momentum >= 3:
+        rec = "wait_1_week" if abs(m) < 12 else "wait_2_weeks"
+        reasoning = (
+            f"Prices are rising (weekly {w:+.1f}%, monthly {m:+.1f}%). Waiting could capture "
+            f"about Rs.{abs(current * momentum / 100):.0f}/quintal more if the trend holds."
+        )
+    else:
+        rec = "sell_now"
+        reasoning = (
+            f"Prices are flat (weekly {w:+.1f}%, monthly {m:+.1f}%). With no clear upside and "
+            f"storage cost/spoilage risk, selling at the current Rs.{current:,.0f}/quintal is safer."
+        )
+
+    return {
+        "current_price": current,
+        "trend_weekly": w,
+        "trend_monthly": m,
+        "trend_quarterly": q,
+        "demand_forecast": "rising" if momentum > 3 else ("falling" if momentum < -3 else "stable"),
+        "supply_forecast": "falling" if momentum > 3 else ("rising" if momentum < -3 else "stable"),
+        "price_forecast_7d": round(current * (1 + max(min(w, 8), -8) / 100), 2),
+        "price_forecast_14d": round(current * (1 + max(min(w + m * 0.5, 12), -12) / 100), 2),
+        "price_forecast_30d": round(current * (1 + max(min(m, 15), -15) / 100), 2),
+        "recommendation": rec,
+        "confidence": 55.0,
+        "reasoning": reasoning,
+    }
+
+
+def find_nearest_mandis(
+    db: Session, lat: float, lon: float, crop: str | None = None, limit: int = 3
+) -> list[dict]:
+    """Nearest mandis from the directory, optionally preferring the crop."""
+    mandis = db.query(Mandi).all()
+    if not mandis:
+        return []
+    scored = []
+    crop_lower = (crop or "").lower()
+    for m in mandis:
+        d = haversine_km(lat, lon, float(m.latitude), float(m.longitude))
+        crop_bonus = -25.0 if crop_lower and crop_lower in [c.lower() for c in (m.major_crops or [])] else 0.0
+        scored.append((d + crop_bonus, d, m))
+    scored.sort(key=lambda t: t[0])
+    return [
+        {
+            "id": str(m.id),
+            "name": m.name,
+            "city": m.city,
+            "district": m.district,
+            "state": m.state,
+            "distance_km": round(d, 1),
+            "major_crops": m.major_crops or [],
+        }
+        for _, d, m in scored[:limit]
+    ]
+
+
+class MarketService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    async def analyze(
+        self,
+        user_id: str,
+        req: MarketPredictionRequest,
+        farmer_loc: dict | None = None,
+    ) -> MarketPrediction:
+        crop_key = req.crop.lower().strip()
+        loc_tag = farmer_loc["label"] if farmer_loc else "national"
+        cache_key = f"market:{crop_key}:{(req.market or loc_tag).lower()}"
+        cached = cache_get(cache_key)
+
+        mandis: list[dict] = []
+        if farmer_loc:
+            mandis = find_nearest_mandis(
+                self.db, farmer_loc["latitude"], farmer_loc["longitude"], crop_key, limit=3
+            )
+
+        # ---- Price source chain: keyed feed > keyless scrape > baseline ----
+        state = farmer_loc.get("state") if farmer_loc else None
+        district = farmer_loc.get("district") if farmer_loc else None
+        market_name = (req.market or (mandis[0]["name"] if mandis else None))
+        source = "baseline"
+        history: list[dict] = []
+        source_meta: dict = {}
+
+        # Tier 1: keyed data.gov.in feed — most specific scope first. Each level
+        # is only useful if it yields fresh-enough rows, and only attempted when
+        # the location value actually exists.
+        for scope, kwargs in (
+            ("market", {"market": market_name} if market_name else None),
+            ("district", {"district": district} if district else None),
+            ("state", {"state": state} if state else None),
+            ("national", {}),
+        ):
+            if kwargs is None:
+                continue
+            points = agmarknet_client.fetch_mandi_prices(req.crop, **kwargs)
+            if points and agmarknet_client.latest_fresh_price(points) is not None:
+                history = points
+                source = f"agmarknet_{scope}"
+                # Remember the top mandis seen at this scope for transparency.
+                source_meta = {
+                    "scope": scope,
+                    "commodity": agmarknet_client.AGMARKNET_COMMODITY.get(crop_key),
+                }
+                break
+
+        # Tier 2: keyless scrape of the public Agmarknet grid, location-filtered
+        # (district/market match preferred; falls back to whole-state rows).
+        if not history and state:
+            try:
+                scraped = await agmarknet_scraper.scrape_prices(
+                    req.crop, state=state, district=district, market=market_name, days=90
+                )
+            except Exception as e:  # never let the scrape tier break the request
+                logger.warning("Agmarknet scrape tier failed: %s", e)
+                scraped = []
+            if scraped and agmarknet_client.latest_fresh_price(scraped) is not None:
+                history = scraped
+                source = "agmarknet_scraped_state"
+                source_meta = {
+                    "scope": "scraped_state",
+                    "commodity": agmarknet_scraper.AGMARKNET_COMMODITY.get(crop_key),
+                    "district": district,
+                    "market": market_name,
+                }
+
+        if not history:
+            history = synthetic_price_history(req.crop)
+            source = "baseline"
+
+        current_price = history[-1]["price"]
+
+        if cached:
+            data = cached
+        else:
+            series = _weekly_series(history, weeks=8)
+            location_block = ""
+            if farmer_loc:
+                location_block = (
+                    f"\nFarmer location: {farmer_loc['label']} "
+                    f"(lat {farmer_loc['latitude']:.4f}, lon {farmer_loc['longitude']:.4f}, "
+                    f"precision: {farmer_loc['precision']})\n"
+                )
+                if mandis:
+                    location_block += (
+                        "Nearest mandis (name, district, distance km, major crops):\n"
+                        + "\n".join(
+                            f"- {m['name']}, {m['district']}, {m['distance_km']} km, crops: {', '.join(m['major_crops']) or 'n/a'}"
+                            for m in mandis
+                        )
+                        + "\n"
+                    )
+            prompt = (
+                f"Crop: {req.crop}\n"
+                f"Market: {req.market or (loc_tag + ' region')}\n"
+                f"Current price: INR {current_price}/quintal\n"
+                f"Price source: {source} ({'real Agmarknet APMC data via data.gov.in' if source != 'baseline' else 'modeled baseline, not live market data'})\n"
+                f"{location_block}\n"
+                f"Recent weekly average prices (oldest to latest, INR/quintal):\n"
+                + "\n".join(f"{p['date']}: {p['price']}" for p in series)
+                + "\n\nReturn ONLY the JSON object per the schema. Keep reasoning under 60 words. No commentary."
+            )
+            try:
+                data = get_claude().complete_json(
+                    system=MARKET_FORECAST_SYSTEM,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=1500,
+                )
+                cache_set(cache_key, data, ttl_seconds=3600)
+            except AIError as e:
+                logger.warning("AI market analysis unavailable (%s); using heuristic analysis", e)
+                data = _heuristic_analysis(req.crop, history)
+            except Exception as e:
+                logger.exception("Market analysis failed")
+                data = _heuristic_analysis(req.crop, history)
+
+        pred = MarketPrediction(
+            user_id=uuid.UUID(user_id),
+            crop=req.crop,
+            market=(mandis[0]["name"] if mandis else req.market),
+            current_price=float(data.get("current_price", current_price)),
+            price_unit="INR/quintal",
+            trend_weekly=float(data.get("trend_weekly", 0)),
+            trend_monthly=float(data.get("trend_monthly", 0)),
+            trend_quarterly=float(data.get("trend_quarterly", 0)),
+            demand_forecast=data.get("demand_forecast", "stable"),
+            supply_forecast=data.get("supply_forecast", "stable"),
+            price_forecast_7d=float(data.get("price_forecast_7d", current_price)),
+            price_forecast_14d=float(data.get("price_forecast_14d", current_price)),
+            price_forecast_30d=float(data.get("price_forecast_30d", current_price)),
+            recommendation=data.get("recommendation", "hold"),
+            confidence=float(data.get("confidence", 50)),
+            reasoning=data.get("reasoning"),
+            price_history=history,
+            data_source=source,
+            source_meta=source_meta or None,
+            model=settings.ANTHROPIC_MODEL,
+        )
+        self.db.add(pred)
+        self.db.flush()
+        return pred

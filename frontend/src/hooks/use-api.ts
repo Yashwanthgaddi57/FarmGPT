@@ -1,0 +1,425 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { api, API_URL } from "@/lib/api";
+import type {
+  Activity,
+  AnalyticsKpis,
+  ChatMessage,
+  ChatSession,
+  CropRecommendationItem,
+  DashboardData,
+  DiseaseReport,
+  Farm,
+  MarketPrediction,
+  Notification,
+  ProfitPrediction,
+  Profile,
+  Recommendation,
+  WeatherIntelligence,
+} from "@/types";
+
+// ---------------- Profile ----------------
+export function useProfile() {
+  return useQuery<Profile>({
+    queryKey: ["profile"],
+    queryFn: async () => (await api.get("/profile")).data,
+    retry: false,
+  });
+}
+
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Partial<Profile>) => (await api.patch("/profile", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["profile"] }),
+  });
+}
+
+// ---------------- Location & Geo ----------------
+export interface VendorItem {
+  id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  district: string | null;
+  state: string | null;
+  latitude: number;
+  longitude: number;
+  crops: string[];
+  distance_km: number;
+  raw_distance_km?: number;
+  matches_crop: boolean;
+  source?: "directory" | "osm";
+}
+
+export interface FarmerLocation {
+  latitude: number;
+  longitude: number;
+  precision: string;
+  label: string;
+  village: string | null;
+  district: string | null;
+  state: string | null;
+}
+
+export function useMyLocation() {
+  return useQuery<FarmerLocation>({
+    queryKey: ["geo", "location"],
+    queryFn: async () => (await api.get("/geo/location")).data,
+  });
+}
+
+export function useSaveLocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      latitude: number;
+      longitude: number;
+      source: "gps" | "map_pin";
+      village?: string | null;
+      district?: string | null;
+      state?: string | null;
+    }) => (await api.post("/geo/location", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["geo"] });
+      qc.invalidateQueries({ queryKey: ["profile"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["weather"] });
+      qc.invalidateQueries({ queryKey: ["market"] });
+      qc.invalidateQueries({ queryKey: ["vendors"] });
+    },
+  });
+}
+
+export function useNearbyVendors(params: { category?: string; crop?: string; radius_km?: number }) {
+  return useQuery<{ location: FarmerLocation; radius_km: number; total: number; items: VendorItem[] }>({
+    queryKey: ["vendors", params],
+    queryFn: async () =>
+      (
+        await api.get("/geo/vendors", {
+          params: {
+            ...(params.category ? { category: params.category } : {}),
+            ...(params.crop ? { crop: params.crop } : {}),
+            ...(params.radius_km ? { radius_km: params.radius_km } : {}),
+          },
+        })
+      ).data,
+  });
+}
+
+export function useNearbyMandis(crop?: string) {
+  return useQuery<{
+    id: string;
+    name: string;
+    district: string | null;
+    distance_km: number;
+    major_crops: string[];
+  }[]>({
+    queryKey: ["geo", "mandis", crop],
+    queryFn: async () =>
+      (await api.get("/geo/mandis", { params: crop ? { crop } : {} })).data,
+  });
+}
+
+// ---------------- Farms ----------------
+export function useFarms() {
+  return useQuery<Farm[]>({
+    queryKey: ["farms"],
+    queryFn: async () => (await api.get("/farms")).data,
+  });
+}
+
+export function useCreateFarm() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Partial<Farm>) => (await api.post("/farms", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["farms"] }),
+  });
+}
+
+export function useUpdateFarm() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...payload }: { id: string } & Partial<Farm>) =>
+      (await api.patch(`/farms/${id}`, payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["farms"] }),
+  });
+}
+
+export function useDeleteFarm() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => api.delete(`/farms/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["farms"] }),
+  });
+}
+
+// ---------------- Dashboard ----------------
+export function useDashboard() {
+  return useQuery<DashboardData>({
+    queryKey: ["dashboard"],
+    queryFn: async () => (await api.get("/dashboard")).data,
+    staleTime: 3 * 60 * 1000,
+    gcTime: 30 * 60 * 1000, // instant paint from cache on revisit
+    refetchOnWindowFocus: false,
+    placeholderData: (prev) => prev, // keep previous data while refetching
+    refetchInterval: 90 * 1000, // pick up bg-refreshed weather/alerts while open
+  });
+}
+
+// ---------------- Crop Recommendations ----------------
+export function useRecommendCrop() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      location: string;
+      farm_size_acres: number;
+      soil_type: string;
+      water_source: string;
+      budget_inr: number;
+      season: string;
+      farm_id?: string;
+    }) => (await api.post("/crops/recommend", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["recommendations"] }),
+  });
+}
+
+export function useRecommendationHistory(page = 1) {
+  return useQuery<{ items: Recommendation[]; total: number }>({
+    queryKey: ["recommendations", page],
+    queryFn: async () =>
+      (await api.get(`/crops/history?page=${page}&page_size=10`)).data,
+  });
+}
+
+// ---------------- Disease Detection ----------------
+export function useAnalyzeDisease() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ image, crop, farm_id }: { image: File; crop: string; farm_id?: string }) => {
+      const form = new FormData();
+      form.append("image", image);
+      form.append("crop", crop);
+      if (farm_id) form.append("farm_id", farm_id);
+      return (
+        await api.post("/disease/analyze", form, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data as DiseaseReport;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["disease"] }),
+  });
+}
+
+export function useDiseaseReports(page = 1) {
+  return useQuery<{ items: DiseaseReport[]; total: number }>({
+    queryKey: ["disease", "reports", page],
+    queryFn: async () => (await api.get(`/disease/reports?page=${page}&page_size=10`)).data,
+  });
+}
+
+export function useDiseaseAnalytics() {
+  return useQuery({
+    queryKey: ["disease", "analytics"],
+    queryFn: async () => (await api.get("/disease/analytics")).data,
+  });
+}
+
+// ---------------- Profit Predictor ----------------
+export function usePredictProfit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      crop: string;
+      farm_size_acres: number;
+      season?: string;
+      seed_cost: number;
+      labor_cost: number;
+      fertilizer_cost: number;
+      irrigation_cost: number;
+      transportation_cost: number;
+      other_cost?: number;
+      farm_id?: string;
+    }) => (await api.post("/profit/predict", payload)).data as ProfitPrediction,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["profit"] }),
+  });
+}
+
+export function useProfitPredictions(page = 1) {
+  return useQuery<{ items: ProfitPrediction[]; total: number }>({
+    queryKey: ["profit", "predictions", page],
+    queryFn: async () => (await api.get(`/profit/predictions?page=${page}&page_size=10`)).data,
+  });
+}
+
+// ---------------- Market Intelligence ----------------
+export function useAnalyzeMarket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { crop: string; market?: string }) =>
+      (await api.post("/market/analyze", payload)).data as MarketPrediction,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["market"] }),
+  });
+}
+
+export function useMarketPredictions(page = 1) {
+  return useQuery<{ items: MarketPrediction[]; total: number }>({
+    queryKey: ["market", "predictions", page],
+    queryFn: async () => (await api.get(`/market/predictions?page=${page}&page_size=10`)).data,
+  });
+}
+
+// ---------------- Weather ----------------
+export function useWeather(location?: string) {
+  return useQuery<WeatherIntelligence>({
+    queryKey: ["weather", location],
+    queryFn: async () =>
+      (await api.get(`/weather${location ? `?location=${encodeURIComponent(location)}` : ""}`)).data,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+// ---------------- Chat ----------------
+export function useChatSessions() {
+  return useQuery<ChatSession[]>({
+    queryKey: ["chat", "sessions"],
+    queryFn: async () => (await api.get("/chat/sessions")).data,
+  });
+}
+
+export function useChatMessages(sessionId: string | null) {
+  return useQuery<ChatMessage[]>({
+    queryKey: ["chat", "messages", sessionId],
+    queryFn: async () => (await api.get(`/chat/sessions/${sessionId}/messages`)).data,
+    enabled: !!sessionId,
+  });
+}
+
+export function useSendMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      content: string;
+      agent?: string;
+      session_id?: string | null;
+    }) => (await api.post("/chat/messages", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat"] });
+    },
+  });
+}
+
+export function useDeleteChatSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => api.delete(`/chat/sessions/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat"] }),
+  });
+}
+
+/**
+ * Streaming chat: POSTs to the SSE endpoint with fetch (axios can't stream),
+ * parses `data: {...}` events, and invokes onEvent for each. Falls back to
+ * the non-streaming endpoint automatically if the stream fails.
+ */
+export async function sendMessageStream(
+  payload: { content: string; agent?: string; session_id?: string | null },
+  onEvent: (e: { type: string; text?: string; agent?: string; session_id?: string; message_id?: string; message?: string }) => void
+): Promise<void> {
+  const raw = localStorage.getItem("agrisphere-auth");
+  let token = "";
+  if (raw) {
+    try {
+      token = JSON.parse(raw)?.access_token ?? "";
+    } catch {
+      /* ignore */
+    }
+  }
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/v1/chat/messages/stream`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok || !res.body) throw new Error(`stream unavailable (${res.status})`);
+  } catch {
+    // Network/endpoint failure -> classic request-response fallback
+    const data = (await api.post("/chat/messages", payload)).data as {
+      session_id: string;
+      message: ChatMessage;
+      agent: string | null;
+    };
+    onEvent({ type: "meta", session_id: data.session_id });
+    onEvent({ type: "agent", agent: data.agent ?? undefined });
+    onEvent({ type: "delta", text: data.message.content });
+    onEvent({ type: "done", session_id: data.session_id, message_id: data.message.id });
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() ?? "";
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith("data:")) continue;
+        try {
+          onEvent(JSON.parse(line.slice(5).trim()));
+        } catch {
+          /* skip malformed chunk */
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// ---------------- Notifications ----------------
+export function useNotifications() {
+  return useQuery<{ items: Notification[]; unread_count: number }>({
+    queryKey: ["notifications"],
+    queryFn: async () => (await api.get("/notifications")).data,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useMarkNotificationsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => (await api.post("/notifications/mark-read", { ids })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+// ---------------- Analytics ----------------
+export function useAnalyticsKpis() {
+  return useQuery<AnalyticsKpis>({
+    queryKey: ["analytics", "kpis"],
+    queryFn: async () => (await api.get("/analytics/kpis")).data,
+  });
+}
+
+export function useActivities(page = 1) {
+  return useQuery<{ items: Activity[]; total: number }>({
+    queryKey: ["activities", page],
+    queryFn: async () => (await api.get(`/analytics/activities?page=${page}&page_size=20`)).data,
+  });
+}
+
+export type { CropRecommendationItem };
