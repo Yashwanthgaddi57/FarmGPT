@@ -1,4 +1,5 @@
 """Application configuration loaded from environment variables."""
+import logging
 from functools import lru_cache
 from typing import Any
 
@@ -88,14 +89,27 @@ class Settings(BaseSettings):
             )
         if self.SUPABASE_DB_URL.startswith("sqlite"):
             errors.append("SUPABASE_DB_URL is SQLite — local file storage is not acceptable in production.")
-        if not self.ANTHROPIC_API_KEY or self.ANTHROPIC_API_KEY.startswith("sk-ant-test"):
+
+        # AI provider: an Anthropic key is only required when AI_PROVIDER is
+        # "anthropic". Bedrock (or other providers) authenticate differently.
+        if (self.AI_PROVIDER or "").lower() == "anthropic" and (
+            not self.ANTHROPIC_API_KEY or self.ANTHROPIC_API_KEY.startswith("sk-ant-test")
+        ):
             errors.append("ANTHROPIC_API_KEY is missing or a test key — AI agents would return fallbacks only.")
+
+        # JWT verification: asymmetric (JWKS/ES256) verification is used when no
+        # shared secret is configured, so a missing SUPABASE_JWT_SECRET is fine.
+        # Only flag the placeholder case (someone pasted the example string).
+        if self.SUPABASE_JWT_SECRET == "your-supabase-jwt-secret":
+            errors.append("SUPABASE_JWT_SECRET is still the example placeholder.")
+
         if self.ENVIRONMENT == "production" and self.BACKEND_CORS_ORIGINS == ["http://localhost:3000"]:
-            errors.append("BACKEND_CORS_ORIGINS is still the local default — browsers on your real domain would be blocked.")
-        if not self.ANTHROPIC_API_KEY or self.ANTHROPIC_API_KEY.startswith("sk-ant-test"):
-            pass  # already reported above
-        if not self.SUPABASE_JWT_SECRET or self.SUPABASE_JWT_SECRET == "your-supabase-jwt-secret":
-            errors.append("SUPABASE_JWT_SECRET is a placeholder — HS256 token verification would be forgeable.")
+            # Warn only: CORS misconfig blocks browsers but is not a data-risk,
+            # and the frontend domain may legitimately not exist yet at deploy time.
+            logging.getLogger(__name__).warning(
+                "BACKEND_CORS_ORIGINS is still the local default — add your real "
+                "frontend domain before launching."
+            )
         if errors:
             raise RuntimeError(
                 "Production readiness check failed:\n"
