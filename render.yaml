@@ -52,8 +52,44 @@ services:
       - key: SCHEDULER_ENABLED
         value: "true"
       # pydantic-settings parses complex fields as JSON first — must be an array.
+      # Adjust the first entry if the frontend service URL differs from the default.
       - key: BACKEND_CORS_ORIGINS
-        value: '["http://localhost:3000"]'
+        value: '["https://agrigpt-web.onrender.com", "http://localhost:3000"]'
+      # Frontend base URL for password-reset email links.
+      - key: FRONTEND_APP_URL
+        value: https://agrigpt-web.onrender.com
+      # data.gov.in public trial key for live Agmarknet mandi prices.
+      # Replace with your own registered key: https://data.gov.in/user/register
+      - key: DATA_GOV_API_KEY
+        value: 579b464db66ec23bdd000001cdd3946e44ce4aad7209ff7b23ac571b
+
+  # ── Frontend (Next.js) ──
+  - type: web
+    name: agrigpt-web
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    rootDir: frontend
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm run start"
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # NEXT_PUBLIC_* vars are inlined at build time — set them before the
+      # first deploy (Render prompts for sync:false values).
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      # Backend base URL — the API service above (no /api/v1 suffix).
+      - key: NEXT_PUBLIC_API_URL
+        value: https://agrigpt-api.onrender.com
+      # This frontend's own URL — used for OAuth redirect targets.
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://agrigpt-web.onrender.com
       - key: SENTRY_DSN
         sync: false
       - key: VAPID_PUBLIC_KEY

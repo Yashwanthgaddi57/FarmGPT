@@ -274,6 +274,27 @@ export function useMarketPredictions(page = 1) {
   });
 }
 
+export interface PriceTickerItem {
+  crop: string;
+  price: number;
+  unit: string;
+  trend_weekly_pct: number;
+  history: { date: string; price: number }[];
+  source: string;
+  is_live: boolean;
+  as_of: string;
+}
+
+export function usePriceTicker() {
+  return useQuery<{ location: { label: string; state: string | null; district: string | null }; items: PriceTickerItem[] }>({
+    queryKey: ["market", "ticker"],
+    queryFn: async () => (await api.get("/market/ticker")).data,
+    // Realtime feel without hammering the API — prices are cached 1h server-side.
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
+  });
+}
+
 // ---------------- Weather ----------------
 export function useWeather(location?: string) {
   return useQuery<WeatherIntelligence>({

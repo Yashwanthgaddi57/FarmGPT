@@ -65,9 +65,12 @@ async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 @router.post("/login")
 async def login(payload: LoginRequest, db: Session = Depends(get_db)):
     """Password grant: local DB in local mode, Supabase Auth in production."""
+    email = payload.email.strip().lower()
+    logger.info("Login attempt for %s", email)
     if local_auth_enabled():
         user = authenticate_local_user(db, payload.email, payload.password)
         if not user:
+            logger.warning("Login failed (local mode) for %s: invalid credentials", email)
             raise AuthError("Invalid email or password")
         return JSONResponse(status_code=200, content=issue_local_tokens(user))
 
@@ -76,7 +79,8 @@ async def login(payload: LoginRequest, db: Session = Depends(get_db)):
     except Exception as e:
         code = getattr(e, "error_code", "") or ""
         msg = str(e).lower()
-        email = payload.email.strip().lower()
+
+        logger.warning("Login failed for %s: code=%s msg=%s", email, code, str(e)[:200])
 
         if code == "email_not_confirmed" or "confirm" in msg:
             raise AuthError(
@@ -124,7 +128,7 @@ async def forgot_password(payload: ForgotPasswordRequest):
             "message": "Local mode: password resets are managed by the administrator. "
             "Delete backend/agrisphere_local.db and re-register to reset credentials."
         }
-    redirect = "http://localhost:3000/reset-password"
+    redirect = f"{settings.FRONTEND_APP_URL.rstrip('/')}/auth/reset-password"
     try:
         await supabase_reset_password(payload.email, redirect)
     except Exception as e:

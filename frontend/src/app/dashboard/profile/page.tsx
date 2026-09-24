@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -8,7 +9,6 @@ import { Loader2, Save } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { LocationPicker } from "@/components/location/LocationPicker";
 import { useSaveLocation } from "@/hooks/use-api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +37,12 @@ const schema = z.object({
   water_availability: z.string(),
 });
 type FormData = z.infer<typeof schema>;
+
+// Leaflet touches `window` on import — load browser-side only.
+const LocationPicker = dynamic(
+  () => import("@/components/location/LocationPicker").then((m) => m.LocationPicker),
+  { ssr: false, loading: () => <div className="h-64 w-full animate-pulse rounded-lg border bg-muted" /> }
+);
 
 export default function ProfilePage() {
   const { data: profile } = useProfile();

@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardTicker } from "@/components/dashboard/price-ticker";
 import { useDashboard } from "@/hooks/use-api";
 import { formatCompactINR, formatINR, riskLabel } from "@/lib/utils";
 
@@ -102,6 +103,9 @@ export default function DashboardPage() {
           </Link>
         </Button>
       </div>
+
+      {/* Realtime mandi price ticker */}
+      <DashboardTicker />
 
       {/* Weather action banner — served from the dashboard payload (no extra request) */}
       {widgets.ai_recommendation && (

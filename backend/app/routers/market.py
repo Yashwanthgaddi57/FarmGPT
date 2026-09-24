@@ -8,9 +8,33 @@ from app.models.market_prediction import MarketPrediction
 from app.schemas.ai_features import MarketPredictionRequest
 from app.services.activity_service import log_activity
 from app.services.location_service import resolve_location_async
-from app.services.market_service import MarketService
+from app.services.market_service import MarketService, price_snapshot, resolve_price_context
 
 router = APIRouter(prefix="/market", tags=["market"])
+
+
+@router.get("/ticker")
+async def price_ticker(user: CurrentUser, db: DBSession, crops: str | None = None):
+    """Realtime price snapshot for the farmer's crops — no AI calls, cached 1h.
+
+    Crops default to the farmer's watched list (latest profit prediction,
+    recommendation, farm crops) padded with staples; pass ?crop=a,b to override.
+    """
+    ctx = resolve_price_context(db, user)
+    if crops:
+        requested = [c.strip().lower() for c in crops.split(",") if c.strip()]
+    else:
+        requested = ctx["crops"][:6]
+
+    items = [
+        price_snapshot(c, state=ctx["state"], district=ctx["district"])
+        for c in requested
+    ]
+    items.sort(key=lambda s: (not s["is_live"], s["crop"]))
+    return {
+        "location": {"label": ctx["label"], "state": ctx["state"], "district": ctx["district"]},
+        "items": items,
+    }
 
 
 @router.post("/analyze")

@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     API_V1_PREFIX: str = "/api/v1"
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    # Base URL of the frontend, used for password-reset email redirects.
+    FRONTEND_APP_URL: str = "http://localhost:3000"
 
     # Supabase
     SUPABASE_URL: str = "https://YOUR_PROJECT_REF.supabase.co"

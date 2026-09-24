@@ -170,7 +170,7 @@ export interface ChatSession {
 
 export interface Notification {
   id: string;
-  type: "weather" | "disease" | "market" | "profit" | "system";
+  type: "weather" | "disease" | "market" | "profit" | "system" | "action";
   channel: string;
   title: string;
   body: string;

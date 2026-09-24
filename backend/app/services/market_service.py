@@ -23,11 +23,16 @@ from app.ai.prompts import MARKET_FORECAST_SYSTEM
 from app.core.cache import cache_get, cache_set
 from app.core.config import settings
 from app.core.exceptions import AIError
+from app.models.farm import Farm
 from app.models.market_prediction import MarketPrediction
 from app.models.mandi import Mandi
+from app.models.profit_prediction import ProfitPrediction
+from app.models.recommendation import Recommendation
+from app.models.user import User
 from app.schemas.ai_features import MarketPredictionRequest
 from app.services import agmarknet_client, agmarknet_scraper
 from app.services.geo_service import haversine_km
+from app.services.location_service import resolve_location
 
 logger = logging.getLogger("app.services.market")
 
@@ -56,6 +61,117 @@ def synthetic_price_history(crop: str, days: int = 90) -> list[dict]:
         price = round(base * (1 + wave), 2)
         out.append({"date": day.isoformat(), "price": price})
     return out
+
+
+# Crops pre-seeded for the realtime price ticker / market alert scans.
+TICKER_CROPS: list[str] = [
+    "wheat", "rice", "paddy", "maize", "cotton", "sugarcane", "soybean",
+    "onion", "potato", "tomato", "gram", "mustard", "groundnut", "turmeric",
+]
+
+
+def resolve_price_context(db: Session, user: User) -> dict:
+    """Farmer's price context (location + watched crops) for realtime features.
+
+    Watched crops come from the latest profit prediction and crop
+    recommendation, padded with the default ticker list. Sync on purpose —
+    only local DB reads, no network.
+    """
+    loc = resolve_location(db, user)
+    crops: list[str] = []
+
+    latest_profit = (
+        db.query(ProfitPrediction)
+        .filter(ProfitPrediction.user_id == user.id)
+        .order_by(ProfitPrediction.created_at.desc())
+        .first()
+    )
+    if latest_profit and latest_profit.crop:
+        name = latest_profit.crop.lower().strip()
+        if name:
+            crops.append(name)
+
+    latest_rec = (
+        db.query(Recommendation)
+        .filter(Recommendation.user_id == user.id)
+        .order_by(Recommendation.created_at.desc())
+        .first()
+    )
+    if latest_rec and latest_rec.crops:
+        first = latest_rec.crops[0]
+        name = (first.get("crop_name") or first.get("name") if isinstance(first, dict) else str(first)) or ""
+        name = name.lower().strip()
+        if name and name not in crops:
+            crops.append(name)
+
+    farms = db.query(Farm).filter(Farm.user_id == user.id).all()
+    for f in farms:
+        if f.current_crop:
+            name = f.current_crop.lower().strip()
+            if name and name not in crops:
+                crops.append(name)
+
+    for c in TICKER_CROPS:
+        if len(crops) >= 6:
+            break
+        if c not in crops:
+            crops.append(c)
+
+    return {
+        "label": loc.label,
+        "state": loc.state,
+        "district": loc.district,
+        "crops": crops,
+    }
+
+
+def price_snapshot(
+    crop: str, state: str | None = None, district: str | None = None
+) -> dict:
+    """Cheapest realtime price read for one crop — tiered source, NO AI calls.
+
+    Same source chain as MarketService.analyze (keyed feed > scrape >
+    baseline) but without the Claude round-trip, so it is safe to call for a
+    dozen crops at once. Cached 1h.
+    """
+    crop_key = crop.lower().strip()
+    cache_key = f"ticker:{crop_key}:{(state or '').lower()}:{(district or '').lower()}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    source, history, meta = "baseline", [], {}
+    for scope, kwargs in (
+        ("district", {"district": district} if district else None),
+        ("state", {"state": state} if state else None),
+        ("national", {}),
+    ):
+        if kwargs is None:
+            continue
+        points = agmarknet_client.fetch_mandi_prices(crop_key, **kwargs)
+        if points:
+            source, history, meta = f"agmarknet_{scope}", points, {"scope": scope}
+            break
+
+    if not history:
+        history = synthetic_price_history(crop_key)
+        source = "baseline"
+
+    current = history[-1]["price"]
+    week_ago = history[-8]["price"] if len(history) >= 8 else current
+    snap = {
+        "crop": crop_key,
+        "price": current,
+        "unit": "INR/quintal",
+        "trend_weekly_pct": _trend_pct(current, week_ago),
+        "history": history[-14:],
+        "source": source,
+        "source_meta": meta,
+        "is_live": source != "baseline",
+        "as_of": history[-1]["date"],
+    }
+    cache_set(cache_key, snap, ttl_seconds=3600)
+    return snap
 
 
 def _weekly_series(history: list[dict], weeks: int = 8) -> list[dict]:
@@ -201,7 +317,7 @@ class MarketService:
                 # Remember the top mandis seen at this scope for transparency.
                 source_meta = {
                     "scope": scope,
-                    "commodity": agmarknet_client.AGMARKNET_COMMODITY.get(crop_key),
+                    "commodity": (agmarknet_client.AGMARKNET_COMMODITY.get(crop_key) or [None])[0],
                 }
                 break
 

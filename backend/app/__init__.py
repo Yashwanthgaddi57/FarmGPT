@@ -1,1 +1,1 @@
-"""AgriSphere AI backend application package."""
+"""AgriGPT backend application package."""
