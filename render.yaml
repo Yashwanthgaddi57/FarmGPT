@@ -3,8 +3,13 @@
 # Secrets marked `sync: false` are prompted for at deploy time (never committed).
 services:
   # ── Backend API (FastAPI) ──
+  # NOTE: production actually runs on the API-created services below (the
+  # Blueprint-managed attempts hit an env-var sync quirk and were deleted).
+  # This file is kept as documentation/rollback; live services:
+  #   agrigpt-api-v2 -> https://agrigpt-api-v2.onrender.com
+  #   agrigpt-web-v2 -> https://agrigpt-web-v2.onrender.com
   - type: web
-    name: agrigpt-api
+    name: agrigpt-api-v2
     runtime: python
     plan: free
     region: singapore          # closest region to India on Render's free tier
@@ -69,9 +74,9 @@ services:
       # ── URLs (must match the actual service URLs after first deploy) ──
       - key: BACKEND_CORS_ORIGINS
         # pydantic-settings parses complex fields as JSON — must be an array.
-        value: '["https://agrigpt-web.onrender.com", "http://localhost:3000"]'
+        value: '["https://agrigpt-web-v2.onrender.com", "http://localhost:3000"]'
       - key: FRONTEND_APP_URL
-        value: https://agrigpt-web.onrender.com
+        value: https://agrigpt-web-v2.onrender.com
       # ── Background alerts ──
       - key: SCHEDULER_ENABLED
         value: "true"
@@ -84,7 +89,7 @@ services:
 
   # ── Frontend (Next.js 15) ──
   - type: web
-    name: agrigpt-web
+    name: agrigpt-web-v2
     runtime: node
     plan: free
     region: singapore
@@ -108,10 +113,8 @@ services:
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
         sync: false
       # Backend base URL — the API service above (no /api/v1 suffix).
-      # NOTE: the API service's real URL is agrigpt-api-zv6j.onrender.com —
-      # the clean name was taken by an earlier attempt.
       - key: NEXT_PUBLIC_API_URL
-        value: https://agrigpt-api-zv6j.onrender.com
+        value: https://agrigpt-api-v2.onrender.com
       # This frontend's own URL — used for OAuth redirect targets.
       - key: NEXT_PUBLIC_APP_URL
-        value: https://agrigpt-web.onrender.com
+        value: https://agrigpt-web-v2.onrender.com
