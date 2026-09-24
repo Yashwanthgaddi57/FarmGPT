@@ -108,8 +108,10 @@ services:
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
         sync: false
       # Backend base URL — the API service above (no /api/v1 suffix).
+      # NOTE: the API service's real URL is agrigpt-api-zv6j.onrender.com —
+      # the clean name was taken by an earlier attempt.
       - key: NEXT_PUBLIC_API_URL
-        value: https://agrigpt-api.onrender.com
+        value: https://agrigpt-api-zv6j.onrender.com
       # This frontend's own URL — used for OAuth redirect targets.
       - key: NEXT_PUBLIC_APP_URL
         value: https://agrigpt-web.onrender.com
