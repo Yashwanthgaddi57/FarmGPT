@@ -4,6 +4,7 @@ Production targets Supabase Postgres. For local no-Docker runs it also
 supports SQLite (set SUPABASE_DB_URL=sqlite:///./agrisphere_local.db);
 tables are then auto-created on startup.
 """
+import logging
 import uuid
 from collections.abc import Generator
 from typing import Any
@@ -15,6 +16,8 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.types import TypeDecorator
 
 from app.core.config import settings
+
+logger = logging.getLogger("app.db")
 
 
 class Base(DeclarativeBase):
@@ -94,13 +97,55 @@ def is_local_db() -> bool:
     return _is_sqlite(settings.SUPABASE_DB_URL)
 
 
-def init_local_db() -> None:
-    """Create all tables + baseline seed data for no-Docker local runs."""
-    if not is_local_db():
-        return
-    from app.core.logging import configure_logging
+def init_db() -> None:
+    """Ensure the schema exists at startup, whatever the database.
 
-    configure_logging()
+    SQLite: full local mode (create all + auto-migrate). Postgres: normally a
+    no-op because schema.sql/alembic provisioned everything — but if the
+    database is completely empty (first deploy, schema.sql not run yet),
+    create the tables from the models so the app works immediately instead of
+    500-ing on every request. Safe: create_all only creates MISSING tables and
+    never alters existing ones.
+    """
+    if is_local_db():
+        init_local_db()
+        return
+
+    import logging
+    import sqlalchemy
+
+    engine = get_engine()
+    try:
+        inspector = sqlalchemy.inspect(engine)
+        tables = inspector.get_table_names()
+    except Exception as e:
+        logger.warning("Schema check failed (%s) — assuming provisioned", e)
+        return
+    if tables:
+        return
+
+    logger = logging.getLogger("app.db")
+    logger.warning("Database is empty — creating schema from models (run schema.sql/alembic for the canonical DDL)")
+    from app.models import (  # noqa: F401  (register mappers)
+        Activity,
+        AgentLog,
+        ChatMessage,
+        ChatSession,
+        DiseaseReport,
+        Farm,
+        MarketPrediction,
+        Notification,
+        ProfitPrediction,
+        Recommendation,
+        User,
+        WeatherRecord,
+    )
+    Base.metadata.create_all(bind=engine)
+    logger.info("Created initial database schema")
+
+
+def init_local_db() -> None:
+    """Create all tables + auto-migrate for SQLite local runs."""
     import logging
 
     logger = logging.getLogger("app.db")

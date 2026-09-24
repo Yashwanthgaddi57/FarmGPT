@@ -93,11 +93,14 @@ class Settings(BaseSettings):
             errors.append("SUPABASE_DB_URL is SQLite — local file storage is not acceptable in production.")
 
         # AI provider: an Anthropic key is only required when AI_PROVIDER is
-        # "anthropic". Bedrock (or other providers) authenticate differently.
-        if (self.AI_PROVIDER or "").lower() == "anthropic" and (
+        # "anthropic". Bedrock uses its own API key/region/model id.
+        provider = (self.AI_PROVIDER or "").lower()
+        if provider == "anthropic" and (
             not self.ANTHROPIC_API_KEY or self.ANTHROPIC_API_KEY.startswith("sk-ant-test")
         ):
             errors.append("ANTHROPIC_API_KEY is missing or a test key — AI agents would return fallbacks only.")
+        if provider == "bedrock" and not self.BEDROCK_API_KEY:
+            errors.append("BEDROCK_API_KEY is missing — AI agents would return fallbacks only.")
 
         # JWT verification: asymmetric (JWKS/ES256) verification is used when no
         # shared secret is configured, so a missing SUPABASE_JWT_SECRET is fine.

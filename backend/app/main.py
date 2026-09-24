@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.core.database import init_local_db
+from app.core.database import init_db
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import get_middlewares
@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     if settings.is_production:
         # Die loudly on dangerous misconfig (local-auth fallback, SQLite, placeholder secrets)
         settings.assert_production_ready()
-    init_local_db()
+    init_db()
     # Seed mandi + vendor directories (idempotent, any database)
     try:
         from app.core.database import get_session_factory
