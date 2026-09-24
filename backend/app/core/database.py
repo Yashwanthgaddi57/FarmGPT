@@ -81,6 +81,12 @@ def get_engine():
             kwargs["connect_args"] = {"check_same_thread": False}
         else:
             kwargs.update(pool_size=5, max_overflow=10, pool_recycle=1800)
+            # Supabase's transaction pooler (pgbouncer, port 6543) does not support
+            # named prepared statements. psycopg3 auto-prepares after 5 executions
+            # of a query, then dies with `prepared statement "_pgX_N" does not
+            # exist` when pgbouncer routes the next execution elsewhere. Disabling
+            # auto-prepare is required for every Supabase pooler connection.
+            kwargs["connect_args"] = {"prepare_threshold": None}
         _engine = create_engine(url, **kwargs)
         _SessionLocal = sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False)
     return _engine
