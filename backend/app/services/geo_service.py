@@ -16,6 +16,7 @@ logger = logging.getLogger("app.geo")
 
 OPEN_METEO_GEOCODE = "https://geocoding-api.open-meteo.com/v1/search"
 NOMINATIM_REVERSE = "https://nominatim.openstreetmap.org/reverse"
+NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search"
 _UA = {"User-Agent": "AgriSphereAI/1.0 (support@agrisphere.ai)"}
 
 EARTH_RADIUS_KM = 6371.0088
@@ -45,7 +46,10 @@ async def geocode_forward(location: str) -> dict[str, Any] | None:
             resp.raise_for_status()
             results = resp.json().get("results") or []
             if not results:
-                return None
+                # Open-Meteo's geocoder is spelling-intolerant (village names in
+                # India have many transliterations). Fall back to Nominatim,
+                # which is fuzzier about spelling.
+                return await _nominatim_search(location, key)
             r = results[0]
             out = {
                 "name": r.get("name", location),
@@ -58,6 +62,40 @@ async def geocode_forward(location: str) -> dict[str, Any] | None:
             return out
     except Exception as e:
         logger.warning("Forward geocode failed for %s: %s", location, e)
+        return None
+
+
+async def _nominatim_search(location: str, cache_key: str) -> dict[str, Any] | None:
+    """Nominatim forward search fallback (spelling-tolerant). Cached 24h."""
+    try:
+        async with httpx.AsyncClient(timeout=10, headers=_UA) as client:
+            resp = await client.get(
+                NOMINATIM_SEARCH,
+                params={
+                    "q": location,
+                    "format": "jsonv2",
+                    "limit": 1,
+                    "addressdetails": 1,
+                    "countrycodes": "in",
+                },
+            )
+            resp.raise_for_status()
+            results = resp.json() or []
+            if not results:
+                return None
+            r = results[0]
+            addr = r.get("address", {}) or {}
+            out = {
+                "name": r.get("name") or (r.get("display_name") or location).split(",")[0].strip(),
+                "latitude": float(r["lat"]),
+                "longitude": float(r["lon"]),
+                "admin1": addr.get("state"),
+                "country": addr.get("country") or r.get("addresstype") and "India" or None,
+            }
+            cache_set(cache_key, out, ttl_seconds=86400)
+            return out
+    except Exception as e:
+        logger.warning("Nominatim search failed for %s: %s", location, e)
         return None
 
 
