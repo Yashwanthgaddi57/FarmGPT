@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     template: "%s | AgriGPT",
   },
   description:
-    "AgriGPT helps farmers plan crops, estimate farm profitability, analyze crop health, understand market conditions and make smarter farming decisions with AI.",
+    "AgriGPT helps farmers plan crops, understand farm economics, analyze crop health, monitor weather and market conditions, and make better farming decisions with AI.",
   manifest: "/manifest.json",
   icons: {
     icon: [

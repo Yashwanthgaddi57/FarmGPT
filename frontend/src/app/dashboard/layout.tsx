@@ -43,17 +43,17 @@ import { LangSwitch, useLang } from "@/lib/i18n";
 import { cn, formatDate } from "@/lib/utils";
 
 const nav = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/dashboard", label: "My Farm", icon: LayoutDashboard, exact: true },
   { href: "/dashboard/plan", label: "Plan My Farm", icon: Sprout },
-  { href: "/dashboard/crops", label: "Crop Advisor", icon: Leaf },
-  { href: "/dashboard/disease", label: "Disease Scan", icon: ScanSearch },
-  { href: "/dashboard/profit", label: "Profit Predictor", icon: Wallet },
-  { href: "/dashboard/profit-calculator", label: "Profit Calculator", icon: Calculator },
-  { href: "/dashboard/market", label: "Market Intelligence", icon: TrendingUp },
+  { href: "/dashboard/disease", label: "Crop Health", icon: ScanSearch },
+  { href: "/dashboard/profit-calculator", label: "Profit", icon: Calculator },
+  { href: "/dashboard/market", label: "Market", icon: TrendingUp },
   { href: "/dashboard/weather", label: "Weather", icon: LineChart },
-  { href: "/dashboard/vendors", label: "Vendors Near Me", icon: Store },
-  { href: "/dashboard/copilot", label: "AI Copilot", icon: MessageSquareHeart },
+  { href: "/dashboard/copilot", label: "Ask AgriGPT", icon: MessageSquareHeart },
   { href: "/dashboard/farm-log", label: "Farm Log", icon: NotebookPen },
+  { href: "/dashboard/crops", label: "Crop Advisor", icon: Leaf },
+  { href: "/dashboard/profit", label: "AI Profit Predictor", icon: Wallet },
+  { href: "/dashboard/vendors", label: "Vendors Near Me", icon: Store },
   { href: "/dashboard/analytics", label: "Analytics", icon: Sparkles },
   { href: "/dashboard/subscription", label: "Subscription", icon: Crown },
 ];
@@ -120,11 +120,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { user, loading, initialized, logout } = useAuth();
   const { t } = useLang();
   const router = useRouter();
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (initialized && !loading && !user) router.replace("/auth/login");
   }, [initialized, loading, user, router]);
+
+  // Farm-first onboarding: new accounts (no farm size recorded yet) are sent
+  // through the onboarding wizard once. Returning users pass straight through.
+  const onboardingCheckDone = React.useRef(false);
+  React.useEffect(() => {
+    if (!initialized || loading || !user || onboardingCheckDone.current) return;
+    onboardingCheckDone.current = true;
+    const isOnboarding = pathname === "/dashboard/onboarding";
+    const needsOnboarding = !user.farm_size_acres && !localStorage.getItem("agrigpt-onboarded");
+    if (needsOnboarding && !isOnboarding) {
+      router.replace("/dashboard/onboarding");
+    } else if (!needsOnboarding) {
+      localStorage.setItem("agrigpt-onboarded", "1");
+    }
+  }, [initialized, loading, user, pathname, router]);
 
   if (!initialized || (loading && !user)) {
     return (

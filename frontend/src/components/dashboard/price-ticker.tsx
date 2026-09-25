@@ -7,7 +7,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePriceTicker } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
 
-/** Realtime mandi price ticker: live price chips for the farmer's crops. */
+/**
+ * Mandi price ticker. Header honestly reflects data state: "Live mandi
+ * prices" only when at least one row comes from the real Agmarknet feed;
+ * otherwise "Latest available mandi prices" (baseline estimates flagged).
+ */
 export function DashboardTicker() {
   const { data, isLoading, isError } = usePriceTicker();
 
@@ -24,13 +28,14 @@ export function DashboardTicker() {
   if (isError || !data) return null; // ticker is a nice-to-have; never block the dashboard
 
   const liveCount = data.items.filter((i) => i.is_live).length;
+  const allLive = liveCount === data.items.length && data.items.length > 0;
 
   return (
     <div className="overflow-x-auto">
       <div className="flex min-w-max items-center gap-3 pb-1">
         <span className="flex shrink-0 items-center gap-1.5 pr-1 text-xs font-medium text-muted-foreground">
-          <Radio className="h-3.5 w-3.5 animate-pulse text-leaf-600" />
-          Live mandi prices
+          <Radio className={cn("h-3.5 w-3.5 text-leaf-600", allLive && "animate-pulse")} />
+          {allLive ? "Live mandi prices" : "Latest available mandi prices"}
         </span>
         {data.items.map((item) => {
           const up = item.trend_weekly_pct >= 0;
@@ -67,7 +72,7 @@ export function DashboardTicker() {
         {liveCount === 0 && (
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Activity className="h-3.5 w-3.5" />
-            Estimates — add a DATA_GOV_API_KEY for live mandi prices
+            Showing modeled estimates — live feed unavailable
           </span>
         )}
       </div>

@@ -70,21 +70,21 @@ PLAN_META: dict[str, dict] = {
     },
     COOPERATIVE: {
         "name": "Cooperative / FPO",
-        "price_inr": 4999,
-        "period": "per month",
+        # Not a purchasable product yet: the org dashboard is in development.
+        # price_inr None renders as "Early access" / "Contact us" everywhere.
+        "price_inr": None,
+        "period": "early access",
         "description": "For FPOs, NGOs and agri-program teams.",
         "features": [
-            "Everything in Pro for each member",
-            "Multi-farmer organization dashboard*",
+            "Organization dashboard (in development)",
+            "Multi-farmer management*",
             "Aggregated analytics & reports*",
-            "Bulk disease scanning*",
             "Admin controls*",
         ],
-        "cta": "Contact sales",
+        "cta": "Contact us",
         "highlight": False,
-        # * = organization features are on the roadmap (see FINAL REPORT TODOs);
-        # marked with * on the pricing page so nothing is promised that does
-        # not exist yet.
+        # * = organization features are on the roadmap; marked with * on the
+        # pricing page so nothing is promised that does not exist yet.
     },
 }
 

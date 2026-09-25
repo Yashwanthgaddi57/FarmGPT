@@ -78,7 +78,8 @@ export default function RegisterPage() {
       if (outcome === "authenticated") {
         trackEvent(EVENTS.signupCompleted, { plan: planParam ?? "free" });
         toast({ title: "Welcome to AgriGPT!", variant: "success" });
-        router.push(planParam === "pro" ? "/dashboard/subscription" : "/dashboard/plan");
+        // Farm-first onboarding; ?plan=pro still lands on subscription after.
+        router.push(planParam === "pro" ? "/dashboard/subscription" : "/dashboard/onboarding");
       } else {
         toast({
           title: "Registration successful",

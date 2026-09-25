@@ -233,11 +233,11 @@ const plans = [
   },
   {
     name: "Cooperative / FPO",
-    price: "₹4,999",
-    period: "per month",
+    price: "Early access",
+    period: "",
     description: "For FPOs, NGOs and agri-program teams.",
-    features: ["Everything in Pro for each member", "Multi-farmer organization dashboard*", "Aggregated analytics & reports*", "Bulk disease scanning*", "Admin controls*"],
-    cta: "Contact sales",
+    features: ["Organization dashboard (in development)", "Multi-farmer management*", "Aggregated analytics & reports*", "Admin controls*"],
+    cta: "Contact us",
     highlight: false,
   },
 ];
@@ -248,8 +248,8 @@ export function Pricing() {
       <div className="container">
         <SectionHeading
           eyebrow="Pricing"
-          title={<>Priced like a <span className="text-gradient">bag of seed</span>, not an enterprise SaaS</>}
-          subtitle="One good sell decision can pay for a year of Pro. Prices in INR, inclusive of all taxes where applicable."
+          title={<>Tools designed to help you make <span className="text-gradient">better farming decisions</span></>}
+          subtitle="Start free. Upgrade when you need more. Prices in INR."
         />
         <div className="grid gap-6 lg:grid-cols-3">
           {plans.map((p, i) => (
@@ -300,9 +300,9 @@ export function Pricing() {
         <p className="mx-auto mt-8 flex max-w-2xl items-start gap-2 text-center text-xs text-muted-foreground">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
-            * Organization features are in development — contact us for early access.
-            Online payments are being integrated; Pro activation is currently handled
-            by our team.
+            * Organization (FPO) features are in early access — the dashboard is not
+            fully available yet. Online payments are being integrated; upgrades are
+            currently handled by our team.
           </span>
         </p>
       </div>
@@ -453,6 +453,7 @@ export function Footer() {
         <div>
           <h4 className="mb-3 text-sm font-semibold">Legal</h4>
           <ul className="space-y-2 text-sm text-leaf-200/80">
+            <li><Link href="/help" className="hover:text-white">Help &amp; support</Link></li>
             <li><Link href="/privacy" className="hover:text-white">Privacy policy</Link></li>
             <li><Link href="/terms" className="hover:text-white">Terms of service</Link></li>
           </ul>
