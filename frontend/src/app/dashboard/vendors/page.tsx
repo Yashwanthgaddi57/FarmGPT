@@ -183,11 +183,11 @@ export default function VendorsPage() {
         </div>
       </div>
 
-      {you && (
+      {you && items.length > 0 && (
         <p className="-mt-3 text-xs text-muted-foreground">
-          Showing vendors within <span className="font-medium">{effectiveRadius} km</span> of{" "}
-          {you.label} — found {items.length}
-          {widened && " (widened — nothing within your radius)"}.
+          Showing <span className="font-medium">{items.length} vendors</span> within{" "}
+          <span className="font-medium">{effectiveRadius} km</span> of {you.label}
+          {widened && " — your radius had none, so we widened the search (distances shown are real)"}.
         </p>
       )}
 
@@ -196,7 +196,9 @@ export default function VendorsPage() {
       {data && items.length === 0 && (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No vendors found for this filter yet. Try clearing the filters.
+            No vendors found for this filter yet. Try the{' '}
+            <button onClick={() => setCategory("")} className="text-leaf-600 underline">All</button>{' '}
+            tab or a bigger radius.
           </CardContent>
         </Card>
       )}

@@ -1,17 +1,21 @@
 """Live vendor discovery from OpenStreetMap via the Overpass API.
 
-Two-tier strategy tuned for Indian OSM coverage:
+Three tiers, ALL evaluated (not gated on the previous one finding results):
   Tier 1 — strictly agri-tagged shops (shop=agriculture/seeds/fertilizer,
            agricultural machinery, agri vending).
-  Tier 2 — when tier 1 is empty: hardware/trade shops whose NAME matches agri
-           keywords (kisan, agro, seed, fertilizer, tractor, pump, ...).
-           Most Indian agri-input shops are tagged `shop=hardware`; the name
-           filter keeps generic electrical/electronics shops out.
+  Tier 2 — hardware/trade/DIY/garden shops. Most Indian agri-input shops are
+           tagged `shop=hardware`; agri relevance comes from the NAME keywords
+           (kisan, agro, seed, fertilizer, tractor, pump, ...). Unnamed
+           hardware shops are kept as generic supplies with lower priority.
+  Tier 3 — named places matching strong agri keywords via Overpass name regex
+           (name~"kisan|krishi|..."), catching shops tagged with unusual
+           categories (shop=yes, commercial, retail etc.).
 
-Cached 24h, fail-soft: on Overpass failure we return [] and the curated
-directory still answers the request.
+Cached 24h per (area, ring); fail-soft: on Overpass failure we return [] and
+the curated directory still answers the request.
 """
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -30,15 +34,23 @@ _UA = {"User-Agent": "AgriSphereAI/1.0 (support@agrisphere.ai)"}
 # Tier 1: unambiguous agri shop tags
 _AGRI_SHOP_RE = "^(agriculture|agrarian|seeds|farm|agricultural_machinery|fertilizer)$"
 
-# Tier 2: generic shop types whose *name* must match agri keywords
-# (case-insensitive). Covers how Indian agri-input shops are actually tagged.
-# Includes wholesale/trade for produce buyers.
-_NAME_KEYWORDS = (
-    "agri|agro|kisan|krishi|seed|beej|fertiliz|fertili|khaad|khad|"
-    "pesticide|dawa|insecticide|tractor|harvester|pump|sprayer|tillier|"
-    "farm|organic manure|bio |buyer|procurement|collection|aggregator|trader|mandi|market|mills|oil|crushing|ginning|export|wholesale"
-)
+# Tier 2: generic shop types. Indian agri-input shops are usually `shop=hardware`.
 _TIER2_SHOP_RE = "^(hardware|trade|doityourself|garden_centre|wholesale)$"
+
+# Strong agri keywords for name matching (tier 2 local filter + tier 3 regex).
+_STRONG_AGRI_RE = re.compile(
+    r"agri|agro|kisan|krishi|seed|beej|fertiliz|fertili|khaad|khad|"
+    r"pesticide|dawa|insecticide|tractor|harvester|pump|sprayer|tiller|"
+    r"farm|organic manure|bio "
+)
+# Weak signals that alone don't prove agri relevance but help tier 3.
+_WEAK_AGRI_RE = re.compile(r"mandi|market|mills|oil|crushing|ginning|export|wholesale|buyer|procurement|collection|aggregator|trader")
+
+# Overpass name regex for tier 3 (strong keywords only, escaped for QGIS regex).
+_TIER3_NAME_RE = (
+    "kisan|krishi|beej|agri|agro|fertilizer|fertiliser|seeds|pesticide|"
+    "tractor|harvester|pump|sprayer|khaad|khad"
+)
 
 
 def _tier1_query(lat: float, lon: float, radius_m: int) -> str:
@@ -56,23 +68,34 @@ out center tags 60;
 
 
 def _tier2_query(lat: float, lon: float, radius_m: int) -> str:
-    # NOTE: no name-regex here — regex + tag filters make Overpass scan and
-    # time out. We fetch hardware/trade shops (index-backed, fast) and filter
-    # by name in Python instead.
+    # No name-regex inside Overpass here: regex + tag filters make it scan and
+    # time out. We fetch hardware/trade shops (index-backed) and filter locally.
     return f"""
 [out:json][timeout:20];
 (
   node["shop"~"{_TIER2_SHOP_RE}"](around:{radius_m},{lat},{lon});
   way["shop"~"{_TIER2_SHOP_RE}"](around:{radius_m},{lat},{lon});
 );
-out center tags 80;
+out center tags 120;
+"""
+
+
+def _tier3_query(lat: float, lon: float, radius_m: int) -> str:
+    # Name regex on nodes/ways WITHOUT a shop tag filter — catches shops that
+    # are tagged oddly but named clearly. Regex on name is heavier; keeping the
+    # element count low via `out center tags 60` and the 20s server timeout.
+    return f"""
+[out:json][timeout:20];
+(
+  node["name"~"{_TIER3_NAME_RE}", i](around:{radius_m},{lat},{lon});
+  way["name"~"{_TIER3_NAME_RE}", i](around:{radius_m},{lat},{lon});
+);
+out center tags 60;
 """
 
 
 def _name_is_agri(name: str) -> bool:
-    import re
-
-    return bool(re.search(_NAME_KEYWORDS, name.lower()))
+    return bool(_STRONG_AGRI_RE.search(name.lower()))
 
 
 def _categorize(tags: dict[str, Any], name_lower: str = "") -> str | None:
@@ -86,7 +109,7 @@ def _categorize(tags: dict[str, Any], name_lower: str = "") -> str | None:
         return "equipment"
     if tags.get("vending") in ("fertilizer", "seeds"):
         return "seeds" if tags["vending"] == "seeds" else "fertilizer"
-    # Tier 2 (name-keyword shops): categorize by dominant keyword
+    # Tier 2/3 (name-keyword shops): categorize by dominant keyword
     if any(k in name_lower for k in ("seed", "beej")):
         return "seeds"
     if any(k in name_lower for k in ("fertiliz", "fertili", "khaad", "khad", "manure")):
@@ -95,10 +118,12 @@ def _categorize(tags: dict[str, Any], name_lower: str = "") -> str | None:
         return "equipment"
     if any(k in name_lower for k in ("pesticide", "insecticide", "dawa")):
         return "pesticide"
-    if any(k in name_lower for k in ("buyer", "procurement", "collection", "aggregator", "trader", "mandi", "market", "mills", "oil", "crushing", "ginning", "export")):
+    if _WEAK_AGRI_RE.search(name_lower):
         return "produce_buyer"
-    if any(k in name_lower for k in ("agri", "agro", "kisan", "krishi", "farm")):
+    if _STRONG_AGRI_RE.search(name_lower):
         return "seeds"  # general agri-input shop
+    if shop in ("hardware", "doityourself", "trade", "wholesale", "garden_centre"):
+        return "pesticide"  # generic supplies shop (kept, low relevance)
     return None
 
 
@@ -167,10 +192,10 @@ async def discover_vendors_osm(
     lat: float,
     lon: float,
     radius_m: int = 25000,
-    limit: int = 20,
+    limit: int = 40,
 ) -> list[dict[str, Any]]:
-    """Agri shops near the pin. Two tiers, radius escalation, cached 24h."""
-    cache_key = f"osm:v2:{round(lat, 2)}:{round(lon, 2)}:{radius_m}"
+    """Agri shops near the pin. All tiers run; radius escalation; cached 24h."""
+    cache_key = f"osm:v3:{round(lat, 2)}:{round(lon, 2)}:{radius_m}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
@@ -178,25 +203,34 @@ async def discover_vendors_osm(
     results: list[dict[str, Any]] = []
     try:
         async with httpx.AsyncClient(timeout=25) as client:
-            # Tier 1 at the requested radius
-            try:
-                results = _parse(await _run_query(client, _tier1_query(lat, lon, radius_m)))
-            except RuntimeError as e:
-                logger.warning("Overpass vendor discovery failed: %s", e)
-                cache_set(cache_key, [], ttl_seconds=600)
-                return []
+            # Tier 1 + tier 2 in parallel; both always run.
+            t1 = _run_query(client, _tier1_query(lat, lon, radius_m))
+            t2 = _run_query(client, _tier2_query(lat, lon, radius_m))
+            t1_res, t2_res = await asyncio.gather(t1, t2, return_exceptions=True)
+            if isinstance(t1_res, BaseException):
+                logger.warning("Overpass tier-1 discovery failed: %s", t1_res)
+                t1_res = []
+            if isinstance(t2_res, BaseException):
+                logger.warning("Overpass tier-2 discovery failed: %s", t2_res)
+                t2_res = []
+            results = _parse(t1_res) + _parse(t2_res)
 
-            # Tier 2: hardware/trade shops with agri names (filtered locally)
-            if not results:
+            # Tier 2 local name filter: named+agri first, then unnamed hardware
+            # shops (still useful — a rural hardware shop usually sells pumps,
+            # pipes and sprayer spares). Dedup across tiers.
+            named = [v for v in results if _name_is_agri(v["name"])]
+            unnamed = [v for v in results if not _name_is_agri(v["name"]) and v["category"] in ("pesticide",)]
+            results = named + unnamed
+
+            # Tier 3: name-regex hunt for unusually-tagged agri shops.
+            if len(results) < 10:
                 try:
-                    elements = await _run_query(client, _tier2_query(lat, lon, radius_m))
-                    agri_named = [
-                        el for el in elements
-                        if _name_is_agri((el.get("tags", {}) or {}).get("name", ""))
-                    ]
-                    results = _parse(agri_named)
+                    elements = await _run_query(client, _tier3_query(lat, lon, radius_m))
+                    extra = _parse(elements)
+                    seen_names = {(v["name"].lower(), round(v["latitude"], 4)) for v in results}
+                    results += [v for v in extra if (v["name"].lower(), round(v["latitude"], 4)) not in seen_names]
                 except RuntimeError as e:
-                    logger.warning("Overpass tier-2 discovery failed: %s", e)
+                    logger.warning("Overpass tier-3 discovery failed: %s", e)
 
             # Radius escalation: nothing found nearby -> try one wider ring.
             # Capped at 45km: larger radii time out on free Overpass servers.
@@ -205,7 +239,7 @@ async def discover_vendors_osm(
                 if wider:
                     cache_set(cache_key, wider, ttl_seconds=86400)
                     return wider
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — fail-soft by design
         logger.warning("Vendor discovery error: %s", e)
         cache_set(cache_key, [], ttl_seconds=600)
         return []

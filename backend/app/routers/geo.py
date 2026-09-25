@@ -79,7 +79,10 @@ async def vendors(
     requested = radius_km
     effective = requested
     if items and items[0]["raw_distance_km"] > requested:
-        effective = min(max(requested * 2, requested), 300)
+        # The service widened (or fell back to nearest-available); echo an
+        # honest effective radius so the UI can label the results correctly.
+        widened_ceiling = min(requested * 2, 300)
+        effective = 300 if items[0]["raw_distance_km"] > widened_ceiling else widened_ceiling
     return NearbyVendorsOut(
         location=LocationOut(**loc.to_dict()),
         radius_km=effective,

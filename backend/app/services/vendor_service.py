@@ -1,12 +1,15 @@
 """Nearby agri-vendor discovery.
 
-Two sources merged, sorted by real distance:
+Sources merged, always sorted by TRUE distance (haversine km):
   1. Curated directory (`vendors` table, seeded with known agri-businesses)
   2. Live OpenStreetMap discovery near the farmer's pin (real local shops)
 
-Discovery is guarded by an overall deadline: if Overpass is slow, the curated
-answer ships first and discovery fills in later (it is cached, so the next
-request is fast).
+Sorting, display distance and radius filtering all use the same real distance.
+Crop/category affinities are returned as flags — they are never baked into the
+distance, so the UI can show honest "X km away" values.
+
+OSM discovery runs at the farmer's chosen radius (capped for free-Overpass
+stability); the nationwide curated directory covers beyond that cap.
 """
 import asyncio
 from typing import Any
@@ -17,12 +20,18 @@ from app.models.mandi import Vendor
 from app.services.geo_service import haversine_km
 from app.services.osm_vendors import discover_vendors_osm
 
-# Overall deadline for live discovery inside a request.
-DISCOVERY_TIMEOUT_S = 12.0
+# Overall deadline for live discovery inside a request. Discovery results are
+# cached 24h, so only the first request for an area pays this cost.
+DISCOVERY_TIMEOUT_S = 20.0
 
-# Category preference when the farmer asks for a specific category: OSM shops
-# matching it exactly outrank directory entries, so live results lead.
-_CATEGORY_BOOST_OSM = -15.0
+# Free Overpass servers time out on very large rings, so OSM discovery is
+# capped; the curated directory (nationwide) covers the rest of the radius.
+_OSM_MAX_RING_M = 60_000
+_OSM_MIN_RING_M = 8_000
+
+
+def _osm_ring_for(radius_km: int) -> int:
+    return max(_OSM_MIN_RING_M, min(int(radius_km * 1000), _OSM_MAX_RING_M))
 
 
 async def nearby_vendors(
@@ -34,19 +43,20 @@ async def nearby_vendors(
     limit: int = 15,
     radius_km: int = 50,
 ) -> list[dict[str, Any]]:
-    """Directory + OSM vendors within radius_km, sorted by distance.
+    """Directory + OSM vendors within radius_km, sorted by true distance.
 
-    Progressive widening (spec D1/D4): if the requested radius yields nothing,
-    widen once to the next step so the page is never needlessly empty; the
-    caller echoes the effective radius actually used.
+    Progressive widening: if the requested radius yields nothing, widen once
+    (2x) so the page is never needlessly empty; the caller echoes the effective
+    radius actually used.
     """
     radius_km = max(5, min(int(radius_km or 50), 300))
+    crop_lower = (crop or "").lower()
+
     directory: list[dict[str, Any]] = []
     for v in db.query(Vendor).all():
         if category and v.category != category:
             continue
         d = haversine_km(lat, lon, float(v.latitude), float(v.longitude))
-        crop_lower = (crop or "").lower()
         crop_match = bool(crop_lower and crop_lower in [c.lower() for c in (v.crops or [])])
         directory.append(
             {
@@ -62,8 +72,8 @@ async def nearby_vendors(
                 "latitude": float(v.latitude),
                 "longitude": float(v.longitude),
                 "crops": v.crops or [],
+                "distance_km": round(d, 1),
                 "raw_distance_km": round(d, 1),
-                "distance_km": round(d - (30.0 if crop_match else 0.0), 1),
                 "matches_crop": crop_match,
                 "source": "directory",
             }
@@ -74,42 +84,38 @@ async def nearby_vendors(
         try:
             # Never let a slow Overpass hold the response hostage.
             osm_shops = await asyncio.wait_for(
-                discover_vendors_osm(lat, lon, radius_m=25000, limit=20),
+                discover_vendors_osm(lat, lon, radius_m=_osm_ring_for(radius_km), limit=40),
                 timeout=DISCOVERY_TIMEOUT_S,
             )
-        except (asyncio.TimeoutError, Exception):  # noqa: BLE001 — fail-soft by design
+        except Exception:  # noqa: BLE001 — fail-soft by design: directory still answers
             osm_shops = []
 
-    crop_lower = (crop or "").lower()
     for v in osm_shops:
         if category and v.get("category") != category:
             continue
         try:
-            d = haversine_km(lat, lon, v["latitude"], v["longitude"])
+            d = round(haversine_km(lat, lon, v["latitude"], v["longitude"]), 1)
         except (KeyError, TypeError, ValueError):
             continue
-        v["raw_distance_km"] = round(d, 1)
-        v["distance_km"] = round(d, 1)
+        v["distance_km"] = d
+        v["raw_distance_km"] = d
         v["matches_crop"] = False
-        osm_boost = _CATEGORY_BOOST_OSM if (category and v.get("category") == category) else 0.0
-        v["distance_km"] = round(d + osm_boost, 1)
 
-    merged = directory + osm_shops
-    # Filter out any entries missing required fields
-    merged = [v for v in merged if v.get("distance_km") is not None and v.get("raw_distance_km") is not None]
-    merged.sort(key=lambda x: x["distance_km"])
+    merged = [v for v in (directory + osm_shops) if v.get("distance_km") is not None]
 
-    # Farmer-controlled radius (replaces the old implicit 150 km cap).
+    # Crop matches get a small priority WITHIN the sort (never enough to cross
+    # a 2 km band), so they surface early without lying about real distance.
+    merged.sort(key=lambda v: v["distance_km"] - (2.0 if v["matches_crop"] else 0.0))
+
     within = [v for v in merged if v["raw_distance_km"] <= radius_km]
     if within:
         return within[:limit]
 
-    # Nothing within radius: widen once (50 -> 100 -> 200 km ceiling).
-    widened = radius_km * 2 if radius_km < 100 else min(radius_km * 2, 300)
-    widened_results = [v for v in merged if v["raw_distance_km"] <= widened]
-    if widened_results:
-        return widened_results[:limit]
+    # Nothing within radius: widen once (2x, 300 km ceiling).
+    widened = min(radius_km * 2, 300)
+    wider_results = [v for v in merged if v["raw_distance_km"] <= widened]
+    if wider_results:
+        return wider_results[:limit]
 
-    # Page never empty: nearest 3 regardless of distance (UI labels them as
-    # 'nearest markets' in the zero-results block).
+    # Page never empty: nearest few regardless of distance (UI explains).
     return merged[:3]
