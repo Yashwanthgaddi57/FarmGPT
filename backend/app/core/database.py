@@ -117,7 +117,6 @@ def init_db() -> None:
         init_local_db()
         return
 
-    import logging
     import sqlalchemy
 
     engine = get_engine()
@@ -128,7 +127,6 @@ def init_db() -> None:
         logger.warning("Schema check failed (%s) — assuming provisioned", e)
         return
     if not tables:
-        logger = logging.getLogger("app.db")
         logger.warning("Database is empty — creating schema from models (run schema.sql/alembic for the canonical DDL)")
         from app.models import (  # noqa: F401  (register mappers)
             Activity,
