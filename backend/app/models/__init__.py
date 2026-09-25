@@ -2,7 +2,9 @@ from app.models.activity import Activity
 from app.models.agent_log import AgentLog
 from app.models.chat import ChatMessage, ChatSession
 from app.models.disease_report import DiseaseReport
+from app.models.expense import Expense
 from app.models.farm import Farm
+from app.models.harvest import Harvest
 from app.models.mandi import Mandi, Vendor
 from app.models.market_prediction import MarketPrediction
 from app.models.notifications import Notification
@@ -18,7 +20,9 @@ __all__ = [
     "ChatMessage",
     "ChatSession",
     "DiseaseReport",
+    "Expense",
     "Farm",
+    "Harvest",
     "Mandi",
     "Vendor",
     "MarketPrediction",

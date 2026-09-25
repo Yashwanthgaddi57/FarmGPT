@@ -11,12 +11,17 @@ import type {
   CropRecommendationItem,
   DashboardData,
   DiseaseReport,
+  EstimatedVsActual,
+  ExpenseItem,
   Farm,
+  HarvestItem,
   MarketPrediction,
   Notification,
   ProfitPrediction,
   Profile,
   Recommendation,
+  TimelineEvent,
+  TodayPlan,
   WeatherIntelligence,
 } from "@/types";
 
@@ -192,6 +197,84 @@ export function useDeleteFarm() {
   return useMutation({
     mutationFn: async (id: string) => api.delete(`/farms/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["farms"] }),
+  });
+}
+
+// ---------------- Decision Engine / Farm Home ----------------
+export function useTodayPlan() {
+  return useQuery<TodayPlan>({
+    queryKey: ["farm", "today"],
+    queryFn: async () => (await api.get("/farm/today")).data,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useExpenses() {
+  return useQuery<{ items: ExpenseItem[]; total: number; per_acre: number; by_category: Record<string, number> }>({
+    queryKey: ["farm", "expenses"],
+    queryFn: async () => (await api.get("/farm/expenses")).data,
+  });
+}
+
+export function useCreateExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      category: string;
+      amount_inr: number;
+      description?: string | null;
+      spent_on: string;
+    }) => (await api.post("/farm/expenses", payload)).data as ExpenseItem,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["farm"] });
+    },
+  });
+}
+
+export function useDeleteExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => api.delete(`/farm/expenses/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["farm"] }),
+  });
+}
+
+export function useHarvests() {
+  return useQuery<{ items: HarvestItem[] }>({
+    queryKey: ["farm", "harvests"],
+    queryFn: async () => (await api.get("/farm/harvests")).data,
+  });
+}
+
+export function useCreateHarvest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      crop: string;
+      harvest_date?: string | null;
+      actual_yield_quintals?: number | null;
+      selling_price_per_quintal?: number | null;
+      market_name?: string | null;
+      revenue_inr?: number | null;
+    }) => (await api.post("/farm/harvests", payload)).data as HarvestItem,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["farm"] });
+    },
+  });
+}
+
+export function useEstimatedVsActual() {
+  return useQuery<EstimatedVsActual>({
+    queryKey: ["farm", "estimated-vs-actual"],
+    queryFn: async () => (await api.get("/farm/estimated-vs-actual")).data,
+  });
+}
+
+export function useFarmTimeline() {
+  return useQuery<{ items: TimelineEvent[] }>({
+    queryKey: ["farm", "timeline"],
+    queryFn: async () => (await api.get("/farm/timeline")).data,
   });
 }
 

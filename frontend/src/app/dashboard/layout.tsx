@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   MessageSquareHeart,
+  NotebookPen,
   ScanSearch,
   Sparkles,
   Sprout,
@@ -52,6 +53,7 @@ const nav = [
   { href: "/dashboard/weather", label: "Weather", icon: LineChart },
   { href: "/dashboard/vendors", label: "Vendors Near Me", icon: Store },
   { href: "/dashboard/copilot", label: "AI Copilot", icon: MessageSquareHeart },
+  { href: "/dashboard/farm-log", label: "Farm Log", icon: NotebookPen },
   { href: "/dashboard/analytics", label: "Analytics", icon: Sparkles },
   { href: "/dashboard/subscription", label: "Subscription", icon: Crown },
 ];

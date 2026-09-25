@@ -33,6 +33,101 @@ def language_directive(lang_hint: str | None, user_language: str | None = None) 
     return f"LANGUAGE: Reply in {name}. Keep technical terms understandable; use common English loanwords where farmers use them."
 
 
+def _decision_context_block(db: Session | None, user: User) -> str | None:
+    """Copilot tool-use (Part 15): pull REAL data the advisor can cite.
+
+    Retrieves recorded expenses, last harvest, latest estimates and any open
+    crop-health issue so questions like "how much did I spend on fertilizer?"
+    are answered from records, not guesses. Returns a compact block or None.
+    """
+    if db is None:
+        return None
+    try:
+        import uuid as uuidlib
+        from datetime import date, timedelta
+
+        from app.models.disease_report import DiseaseReport
+        from app.models.expense import Expense
+        from app.models.harvest import Harvest
+        from app.models.profit_prediction import ProfitPrediction
+
+        uid = uuidlib.UUID(str(user.id))
+        lines: list[str] = []
+
+        # Expenses by category (last 90 days)
+        since = date.today() - timedelta(days=90)
+        rows = (
+            db.query(Expense.category, Expense.amount_inr)
+            .filter(Expense.user_id == uid, Expense.spent_on >= since)
+            .all()
+        )
+        if rows:
+            by_cat: dict[str, float] = {}
+            for cat, amt in rows:
+                by_cat[cat] = by_cat.get(cat, 0) + float(amt or 0)
+            total = sum(by_cat.values())
+            breakdown = ", ".join(f"{k}: Rs.{v:,.0f}" for k, v in sorted(by_cat.items(), key=lambda kv: -kv[1]))
+            lines.append(
+                f"RECORDED EXPENSES (last 90 days): total Rs.{total:,.0f} — {breakdown}"
+            )
+
+        # Latest profit estimate
+        est = (
+            db.query(ProfitPrediction)
+            .filter(ProfitPrediction.user_id == uid)
+            .order_by(ProfitPrediction.created_at.desc())
+            .first()
+        )
+        if est:
+            lines.append(
+                f"LATEST PROFIT ESTIMATE: {est.crop} — cost Rs.{float(est.total_cost or 0):,.0f}, "
+                f"expected revenue Rs.{float(est.expected_revenue or 0):,.0f}, "
+                f"expected profit Rs.{float(est.expected_profit or 0):,.0f} (AI estimate)"
+            )
+
+        # Last harvest (actual outcome)
+        h = (
+            db.query(Harvest)
+            .filter(Harvest.user_id == uid)
+            .order_by(Harvest.created_at.desc())
+            .first()
+        )
+        if h:
+            parts = [f"LAST HARVEST: {h.crop}"]
+            if h.actual_yield_quintals is not None:
+                parts.append(f"yield {float(h.actual_yield_quintals):.1f} q")
+            if h.selling_price_per_quintal is not None:
+                parts.append(f"price Rs.{float(h.selling_price_per_quintal):,.0f}/q")
+            if h.revenue_inr is not None:
+                parts.append(f"revenue Rs.{float(h.revenue_inr):,.0f}")
+            lines.append(" ".join(parts) + " (actual recorded data)")
+
+        # Open crop-health issue
+        scan = (
+            db.query(DiseaseReport)
+            .filter(
+                DiseaseReport.user_id == uid,
+                DiseaseReport.is_healthy.is_(False),
+                DiseaseReport.created_at >= date.today() - timedelta(days=30),
+            )
+            .order_by(DiseaseReport.created_at.desc())
+            .first()
+        )
+        if scan:
+            status = scan.followup_status or "open"
+            lines.append(
+                f"RECENT CROP HEALTH: possible {scan.disease_name} on {scan.crop} "
+                f"({scan.confidence:.0f}% confidence, status {status}) — mention monitoring if relevant"
+            )
+
+        if not lines:
+            return None
+        return "FARM RECORDS (verified user data — cite these instead of guessing):\n" + "\n".join(lines)
+    except Exception as e:
+        logger.warning("Decision context block failed: %s", e)
+        return None
+
+
 def _crop_age_line(db: Session | None, user: User) -> str | None:
     """Crop-age line from the farm's planting_date, when actually recorded.
 
@@ -90,6 +185,9 @@ def build_farmer_context(user: User, db=None, language_hint: str | None = None) 
     crop_age = _crop_age_line(db, user)
     if crop_age:
         parts.append(crop_age)
+    records = _decision_context_block(db, user)
+    if records:
+        parts.append(records)
     directive = language_directive(language_hint, getattr(user, "language", None))
     if directive:
         parts.append(directive)

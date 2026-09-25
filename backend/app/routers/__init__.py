@@ -9,6 +9,7 @@ from app.routers import (
     crops,
     dashboard,
     disease,
+    farm_engine,
     geo,
     market,
     notifications,
@@ -33,5 +34,6 @@ api_router.include_router(chat.router)
 api_router.include_router(notifications.router)
 api_router.include_router(analytics.router)
 api_router.include_router(subscription.router)
+api_router.include_router(farm_engine.router)
 api_router.include_router(admin.router)
 api_router.include_router(push.router)

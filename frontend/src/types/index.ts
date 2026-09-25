@@ -203,6 +203,98 @@ export interface AnalyticsKpis {
   profit_prediction_accuracy: number;
 }
 
+export interface TodayPlanPriority {
+  rank: number;
+  icon: string;
+  level: "low" | "medium" | "high";
+  title: string;
+  detail: string;
+  basis: string;
+}
+
+export interface TodayPlan {
+  generated_for: string;
+  farm: {
+    name: string | null;
+    size_acres: number;
+    village: string | null;
+    district: string | null;
+    state: string | null;
+    crop: string | null;
+    planting_date: string | null;
+    crop_age_days: number | null;
+    crop_stage: string | null;
+    soil_type: string;
+    water_source: string;
+  };
+  weather: {
+    summary: string;
+    rain_probability: number | null;
+    rain_mm: number | null;
+    source: string;
+  } | null;
+  crop_health: {
+    has_open_issue: boolean;
+    crop?: string;
+    possible_issue?: string;
+    confidence?: number;
+    severity?: string;
+    followup_status?: string;
+    days_ago?: number;
+  };
+  market: {
+    crop: string;
+    price: number;
+    unit: string;
+    trend_weekly_pct: number;
+    source: string;
+    is_live: boolean;
+    as_of: string;
+  } | null;
+  economics: {
+    estimated_cost: number;
+    estimated_revenue: number;
+    estimated_profit: number;
+    crop: string | null;
+    recorded_expenses_total: number;
+    last_harvest: { crop: string; yield_quintals: number; price_per_quintal: number; revenue_inr: number } | null;
+  };
+  priorities: TodayPlanPriority[];
+  disclaimer: string;
+}
+
+export interface ExpenseItem {
+  id: string;
+  category: string;
+  amount_inr: number;
+  description: string | null;
+  spent_on: string;
+}
+
+export interface HarvestItem {
+  id: string;
+  crop: string;
+  harvest_date: string | null;
+  actual_yield_quintals: number | null;
+  selling_price_per_quintal: number | null;
+  market_name: string | null;
+  revenue_inr: number | null;
+}
+
+export interface EstimatedVsActual {
+  estimated: { crop: string | null; yield_quintals: number | null; price_per_quintal: number | null; revenue: number | null; cost: number | null; profit: number | null };
+  actual: { crop: string | null; yield_quintals: number | null; price_per_quintal: number | null; revenue: number | null; cost: number | null; profit: number | null };
+  difference: Record<string, number | null>;
+  has_comparison: boolean;
+}
+
+export interface TimelineEvent {
+  date: string;
+  type: string;
+  title: string;
+  detail: string;
+}
+
 export interface DashboardData {
   location?: {
     label: string;
