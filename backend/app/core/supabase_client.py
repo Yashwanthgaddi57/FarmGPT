@@ -52,8 +52,16 @@ def _service_key_ok() -> bool:
 
 
 def _normalize_session(resp_json: dict) -> dict:
-    """Unify the two Supabase response shapes into one auth contract."""
-    sess = resp_json.get("session") or {}
+    """Unify the two Supabase response shapes into one auth contract.
+
+    The anon /auth/v1/signup and admin /auth/v1/admin/users responses nest
+    the session under a "session" key, but the password-grant
+    /auth/v1/token?grant_type=password response is flat (access_token at the
+    top level). Handle both so callers always get a flat session dict.
+    """
+    sess = resp_json.get("session")
+    if not isinstance(sess, dict) or not sess:
+        sess = resp_json
     user = resp_json.get("user") or {}
     return {
         "access_token": sess.get("access_token"),
