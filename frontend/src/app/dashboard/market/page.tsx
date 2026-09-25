@@ -23,10 +23,12 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useAnalyzeMarket,
+  useMarketCompare,
   useMarketPredictions,
   useNearbyMandis,
 } from "@/hooks/use-api";
 import { apiErrorMessage } from "@/lib/api";
+import { trackEvent, EVENTS } from "@/lib/events";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate, formatINR } from "@/lib/utils";
 
@@ -47,8 +49,13 @@ export default function MarketPage() {
   const [market, setMarket] = React.useState("");
   const result = analyze.data;
 
-  // "Where should I sell?" — nearest mandis for the analyzed crop
+  React.useEffect(() => {
+    trackEvent(EVENTS.marketPageViewed);
+  }, []);
+
+  // "Where should I sell?" — per-mandi price comparison for the analyzed crop
   const { data: mandis } = useNearbyMandis(result?.crop || undefined);
+  const { data: comparison } = useMarketCompare(result?.crop || undefined);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,40 +194,59 @@ export default function MarketPage() {
                 </Card>
               </div>
 
-              {/* Where should I sell? */}
+              {/* Where should I sell? — per-mandi price comparison */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Where should I sell?</CardTitle>
                   <CardDescription>
-                    Nearest APMC mandis for {result.crop} — call ahead or visit the mandi for today&apos;s actual rates.
+                    Price comparison across your nearest APMC mandis for {result.crop}.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {!mandis || mandis.length === 0 ? (
+                  {comparison && comparison.items.length > 0 ? (
+                    <>
+                      <div className="space-y-2">
+                        {comparison.items.map((m, i) => (
+                          <div
+                            key={`${m.mandi}-${i}`}
+                            className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 ${
+                              i === 0 ? "border-leaf-300 bg-leaf-50/50 dark:bg-leaf-950/20" : ""
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <p className="flex items-center gap-2 truncate font-medium">
+                                {i === 0 && <Badge variant="success" className="shrink-0 text-[10px]">Best price</Badge>}
+                                {m.mandi}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {m.district ?? "—"} · {m.distance_km} km
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold">
+                                {formatINR(m.price)}
+                                <span className="ml-1 text-[10px] font-normal text-muted-foreground">/q</span>
+                              </p>
+                              <p className="flex items-center justify-end gap-1 text-[11px] text-muted-foreground">
+                                <span className={m.trend_weekly_pct >= 0 ? "text-leaf-600" : "text-red-600"}>
+                                  {m.trend_weekly_pct >= 0 ? "▲" : "▼"} {Math.abs(m.trend_weekly_pct).toFixed(1)}%
+                                </span>
+                                {!m.is_live && <Badge variant="warning" className="text-[9px]">est</Badge>}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{comparison.note}</p>
+                    </>
+                  ) : !mandis || mandis.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       Save your farm location in your{" "}
                       <a href="/dashboard/profile" className="text-leaf-600 underline">profile</a>{" "}
-                      to see nearby mandis.
+                      to compare nearby mandis.
                     </p>
                   ) : (
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {mandis.map((m) => (
-                        <div key={m.id} className="rounded-lg border p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="truncate font-medium">{m.name}</p>
-                            <Badge variant="secondary" className="shrink-0 text-[10px]">
-                              {m.distance_km} km
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground">{m.district ?? "—"}</p>
-                          {m.major_crops.length > 0 && (
-                            <p className="mt-1 text-[11px] capitalize text-muted-foreground">
-                              {m.major_crops.slice(0, 4).join(", ")}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    <p className="text-sm text-muted-foreground">Market data currently unavailable for these mandis.</p>
                   )}
                 </CardContent>
               </Card>

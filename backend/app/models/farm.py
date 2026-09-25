@@ -1,8 +1,8 @@
 """Farm model."""
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text, func
 from app.core.database import GUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,6 +23,7 @@ class Farm(Base):
     water_source: Mapped[str] = mapped_column(String(20), default="rainfed")
     current_crop: Mapped[str | None] = mapped_column(Text)
     current_season: Mapped[str | None] = mapped_column(Text)
+    planting_date: Mapped[date | None] = mapped_column(Date)  # when current_crop was sown
     latitude: Mapped[float | None] = mapped_column(Numeric(9, 6))
     longitude: Mapped[float | None] = mapped_column(Numeric(9, 6))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

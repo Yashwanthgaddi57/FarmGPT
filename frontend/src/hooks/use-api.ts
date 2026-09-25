@@ -151,6 +151,42 @@ export function useUpdateFarm() {
   });
 }
 
+export function useSavePlantingDate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      farm_id?: string | null;
+      crop: string;
+      planting_date: string; // ISO date
+    }) => {
+      if (payload.farm_id) {
+        return (
+          await api.patch(`/farms/${payload.farm_id}`, {
+            current_crop: payload.crop,
+            planting_date: payload.planting_date,
+          })
+        ).data as Farm;
+      }
+      // No farm record yet — create one with the planting info.
+      const profile = (await api.get("/profile")).data as Profile;
+      return (
+        await api.post("/farms", {
+          name: "My Farm",
+          area_acres: profile.farm_size_acres || 1,
+          soil_type: profile.soil_type || "unknown",
+          water_source: profile.water_availability || "rainfed",
+          current_crop: payload.crop,
+          planting_date: payload.planting_date,
+        })
+      ).data as Farm;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["farms"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
 export function useDeleteFarm() {
   const qc = useQueryClient();
   return useMutation({
@@ -300,6 +336,34 @@ export interface PriceTickerItem {
   as_of: string;
 }
 
+export interface MandiPriceCompare {
+  mandi: string;
+  district: string | null;
+  state: string | null;
+  distance_km: number;
+  price: number;
+  unit: string;
+  trend_weekly_pct: number;
+  source: string;
+  is_live: boolean;
+  as_of: string;
+}
+
+export function useMarketCompare(crop?: string) {
+  return useQuery<{
+    crop: string;
+    location: string;
+    items: MandiPriceCompare[];
+    note: string;
+  }>({
+    queryKey: ["market", "compare", crop],
+    queryFn: async () =>
+      (await api.get("/market/compare", { params: crop ? { crop } : {} })).data,
+    enabled: !!crop,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function usePriceTicker() {
   return useQuery<{ location: { label: string; state: string | null; district: string | null }; items: PriceTickerItem[] }>({
     queryKey: ["market", "ticker"],
@@ -444,11 +508,7 @@ export function useMarkNotificationsRead() {
   });
 }
 
-// ---------------- Analytics events (product funnel) ----------------
-export function trackEvent(event: string, metadata?: Record<string, unknown>) {
-  // Fire-and-forget; never block the UI on analytics.
-  api.post("/analytics/events", { event, metadata }).catch(() => undefined);
-}
+// ---------------- Analytics events moved to lib/events.ts ----------------
 
 // ---------------- Subscription ----------------
 export interface PlanInfo {

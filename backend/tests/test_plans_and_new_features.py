@@ -6,6 +6,7 @@ import uuid
 
 import pytest
 
+from app.models.chat import ChatSession
 from tests.factories import make_disease_report, make_user
 
 
@@ -272,3 +273,52 @@ def test_plan_limits_shape():
     for plan, limits in PLAN_LIMITS.items():
         assert isinstance(limits, dict)
         assert all(isinstance(v, int) and (v == -1 or v >= 0) for v in limits.values())
+
+
+# ---------------------------------------------------------------------------
+# Chat quota counts farmer messages only
+# ---------------------------------------------------------------------------
+def test_chat_quota_counts_only_user_messages(auth_client, sample_user, db_session):
+    """20/day limit must count farmer turns, not assistant replies too."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.core.plans_service import check_chat_quota
+    from app.models.chat import ChatMessage
+
+    session = ChatSession(user_id=sample_user.id, title="t")
+    db_session.add(session)
+    db_session.flush()
+    hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    for _ in range(19):
+        db_session.add(ChatMessage(session_id=session.id, user_id=sample_user.id,
+                                   role="user", content="hi", created_at=hour_ago))
+        db_session.add(ChatMessage(session_id=session.id, user_id=sample_user.id,
+                                   role="assistant", content="hello", created_at=hour_ago))
+    db_session.flush()
+
+    # 19 user messages -> under the 20 limit, must not raise
+    check_chat_quota(db_session, sample_user)
+
+    # 20th user message hits the limit
+    db_session.add(ChatMessage(session_id=session.id, user_id=sample_user.id,
+                               role="user", content="again", created_at=hour_ago))
+    db_session.flush()
+    from app.core.plans_service import PlanLimitExceeded
+
+    with pytest.raises(PlanLimitExceeded):
+        check_chat_quota(db_session, sample_user)
+
+
+# ---------------------------------------------------------------------------
+# Market comparison endpoint
+# ---------------------------------------------------------------------------
+def test_market_compare_returns_flagged_snapshots(auth_client, sample_user):
+    """Compare endpoint returns per-mandi rows with source/live flags."""
+    resp = auth_client.get("/api/v1/market/compare", params={"crop": "wheat"})
+    assert resp.status_code in (200, 502)  # 502 only if geo resolution fails offline
+    if resp.status_code == 200:
+        body = resp.json()
+        assert "items" in body and "note" in body
+        for item in body["items"]:
+            assert "mandi" in item and "price" in item
+            assert "is_live" in item and "source" in item

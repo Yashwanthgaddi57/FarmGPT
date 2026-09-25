@@ -18,6 +18,7 @@ import {
   useUpdateDiseaseFollowup,
 } from "@/hooks/use-api";
 import { apiErrorMessage } from "@/lib/api";
+import { trackEvent, EVENTS } from "@/lib/events";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/utils";
 
@@ -41,6 +42,7 @@ export default function DiseasePage() {
   const [preview, setPreview] = React.useState<string | null>(null);
   const [crop, setCrop] = React.useState("");
   const [page, setPage] = React.useState(1);
+  const [compareIds, setCompareIds] = React.useState<string[]>([]);
   const analyze = useAnalyzeDisease();
   const { data: reports } = useDiseaseReports(page);
   const { data: analytics } = useDiseaseAnalytics();
@@ -67,7 +69,12 @@ export default function DiseasePage() {
       return;
     }
     try {
+      trackEvent(EVENTS.diseaseScanStarted, { crop });
       await analyze.mutateAsync({ image: file, crop });
+      trackEvent(EVENTS.diseaseScanCompleted, {
+        crop,
+        healthy: analyze.data?.is_healthy ?? null,
+      });
       toast({ title: "Analysis complete", variant: "success" });
     } catch (err) {
       toast({
@@ -260,10 +267,30 @@ export default function DiseasePage() {
           {(reports?.items ?? []).length === 0 ? (
             <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No scans yet.</CardContent></Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {(reports?.items ?? []).map((r) => (
-                <Card key={r.id}>
+            <>
+              <p className="text-xs text-muted-foreground">
+                Select any two scans to compare side by side.
+              </p>
+              <div className="grid gap-4 md:grid-cols-2">
+                {(reports?.items ?? []).map((r) => (
+                  <Card
+                    key={r.id}
+                    className={compareIds.includes(r.id) ? "border-leaf-500" : ""}
+                  >
                   <CardContent className="flex gap-4 pt-6">
+                    <button
+                      className="mt-1 self-start text-[11px] text-leaf-600 underline"
+                      onClick={() =>
+                        setCompareIds((prev) =>
+                          prev.includes(r.id)
+                            ? prev.filter((id) => id !== r.id)
+                            : [...prev, r.id].slice(-2)
+                        )
+                      }
+                      aria-pressed={compareIds.includes(r.id)}
+                    >
+                      {compareIds.includes(r.id) ? "✓ Selected for comparison" : "Compare"}
+                    </button>
                     {r.image_url && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={r.image_url} alt={r.crop} className="h-20 w-20 rounded-lg object-cover" />
@@ -303,7 +330,35 @@ export default function DiseasePage() {
                   </CardContent>
                 </Card>
               ))}
-            </div>
+              </div>
+              {compareIds.length === 2 && (() => {
+                const [a, b] = compareIds.map((id) =>
+                  (reports?.items ?? []).find((r) => r.id === id)
+                );
+                if (!a || !b) return null;
+                return (
+                  <Card className="border-leaf-300">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">Scan comparison</CardTitle>
+                      <CardDescription>Side-by-side of the two selected scans</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-4 sm:grid-cols-2">
+                      {[a, b].map((r) => (
+                        <div key={r.id} className="rounded-lg border p-3">
+                          <p className="font-semibold">{r.disease_name}</p>
+                          <p className="text-sm capitalize text-muted-foreground">{r.crop} · {formatDate(r.created_at)}</p>
+                          <div className="mt-2 space-y-1 text-sm">
+                            <p>Confidence: {r.confidence.toFixed(0)}%</p>
+                            <p>Severity: <span className="capitalize">{r.is_healthy ? "healthy" : r.severity}</span> ({r.severity_score.toFixed(0)}/100)</p>
+                            <p>Status: {r.followup_status ?? (r.is_healthy ? "—" : "open")}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+            </>
           )}
           {reports && reports.total > 10 && (
             <div className="flex justify-center gap-2">

@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,6 +22,7 @@ import {
 import { useAuth } from "@/contexts/auth-context";
 import { GoogleButton } from "@/components/auth/google-button";
 import { apiErrorMessage } from "@/lib/api";
+import { trackEvent, EVENTS } from "@/lib/events";
 import { useToast } from "@/hooks/use-toast";
 
 const SOILS = ["black", "alluvial", "loamy", "clay", "sandy", "silt", "laterite", "red", "peaty", "unknown"];
@@ -58,12 +60,25 @@ export default function RegisterPage() {
   const soil = watch("soil_type");
   const water = watch("water_availability");
 
+  // Landing-page pricing CTAs link here with ?plan=pro|cooperative —
+  // remember it so we can route the farmer to the subscription page after
+  // signup (fixes the dangling ?plan=pro wire).
+  const planParam = new URLSearchParams(
+    typeof window !== "undefined" ? window.location.search : ""
+  ).get("plan");
+
+  React.useEffect(() => {
+    trackEvent(EVENTS.signupStarted, { plan: planParam ?? "free" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const onSubmit = async (data: FormData) => {
     try {
       const outcome = await registerUser(data);
       if (outcome === "authenticated") {
+        trackEvent(EVENTS.signupCompleted, { plan: planParam ?? "free" });
         toast({ title: "Welcome to AgriGPT!", variant: "success" });
-        router.push("/dashboard");
+        router.push(planParam === "pro" ? "/dashboard/subscription" : "/dashboard/plan");
       } else {
         toast({
           title: "Registration successful",

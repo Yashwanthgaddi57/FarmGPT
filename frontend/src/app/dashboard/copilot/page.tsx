@@ -15,7 +15,7 @@ import {
   useSendMessage,
   sendMessageStream,
 } from "@/hooks/use-api";
-import { trackEvent } from "@/hooks/use-api";
+import { trackEvent, EVENTS } from "@/lib/events";
 import type { ChatMessage } from "@/types";
 import { cn, formatDate } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
@@ -105,7 +105,7 @@ export default function CopilotPage() {
       );
       utterance.lang = SPEECH_LOCALES[lang] ?? "en-IN";
       window.speechSynthesis.speak(utterance);
-      trackEvent("tts_used");
+      trackEvent(EVENTS.ttsUsed);
     },
     [ttsEnabled, lang]
   );
@@ -128,7 +128,7 @@ export default function CopilotPage() {
       const transcript = e.results?.[0]?.[0]?.transcript ?? "";
       if (transcript) {
         setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
-        trackEvent("voice_input_used");
+        trackEvent(EVENTS.voiceInputUsed);
       }
     };
     recognition.onend = () => setListening(false);
@@ -271,8 +271,9 @@ export default function CopilotPage() {
                 <div>
                   <h3 className="font-semibold">Your AI Farm Copilot</h3>
                   <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                    Ask by text or 🎤 voice — it knows your farm profile, recent
-                    scans and market views. Type, speak, or pick a suggestion.
+                    {speechSupported
+                      ? "Ask by text or 🎤 voice — it knows your farm profile, recent scans and market views."
+                      : "🎤 Voice input isn't supported in this browser — type your question instead. It knows your farm profile, recent scans and market views."}
                   </p>
                 </div>
                 <div className="grid w-full max-w-lg gap-2 sm:grid-cols-2">

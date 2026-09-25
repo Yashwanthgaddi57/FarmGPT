@@ -19,7 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useProfile, useUpdateProfile } from "@/hooks/use-api";
+import {
+  useFarms,
+  useProfile,
+  useSavePlantingDate,
+  useUpdateProfile,
+} from "@/hooks/use-api";
 import { apiErrorMessage } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -58,10 +63,23 @@ export default function ProfilePage() {
   const { data: profile } = useProfile();
   const update = useUpdateProfile();
   const saveLocation = useSaveLocation();
+  const savePlanting = useSavePlantingDate();
+  const { data: farms } = useFarms();
   const { toast } = useToast();
   const [soil, setSoil] = React.useState("unknown");
   const [water, setWater] = React.useState("rainfed");
   const [language, setLanguage] = React.useState("en");
+  const [plantingCrop, setPlantingCrop] = React.useState("");
+  const [plantingDate, setPlantingDate] = React.useState("");
+
+  // Pre-fill the planting card from the farm that has a current crop.
+  React.useEffect(() => {
+    const withCrop = (farms ?? []).find((f) => f.current_crop);
+    if (withCrop) {
+      setPlantingCrop(withCrop.current_crop ?? "");
+      setPlantingDate(withCrop.planting_date ?? "");
+    }
+  }, [farms]);
 
   React.useEffect(() => {
     if (profile) {
@@ -204,6 +222,56 @@ export default function ProfilePage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="sm:col-span-2 space-y-3 rounded-xl border p-4">
+              <div>
+                <Label className="text-sm font-medium">Current crop & planting date</Label>
+                <p className="text-xs text-muted-foreground">
+                  When recorded, the copilot tailors advice to your crop&apos;s age
+                  (e.g. &quot;your chilli is ~42 days old&quot;).
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Crop</Label>
+                  <Input
+                    placeholder="e.g. chilli"
+                    value={plantingCrop}
+                    onChange={(e) => setPlantingCrop(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Planting date</Label>
+                  <Input
+                    type="date"
+                    max={new Date().toISOString().slice(0, 10)}
+                    value={plantingDate}
+                    onChange={(e) => setPlantingDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!plantingCrop || !plantingDate || savePlanting.isPending}
+                onClick={async () => {
+                  try {
+                    const withCrop = (farms ?? []).find((f) => f.current_crop);
+                    await savePlanting.mutateAsync({
+                      farm_id: withCrop?.id ?? null,
+                      crop: plantingCrop,
+                      planting_date: plantingDate,
+                    });
+                    toast({ title: "Planting details saved", variant: "success" });
+                  } catch (e) {
+                    toast({ title: "Save failed", description: apiErrorMessage(e), variant: "destructive" });
+                  }
+                }}
+              >
+                {savePlanting.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                Save planting details
+              </Button>
             </div>
             <div className="sm:col-span-2">
               <Button type="submit" disabled={isSubmitting || update.isPending} className="gap-2">

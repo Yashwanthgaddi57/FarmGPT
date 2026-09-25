@@ -225,6 +225,9 @@ _PG_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "followup_status": "VARCHAR(30)",
         "notes": "TEXT",
     },
+    "farms": {
+        "planting_date": "DATE",
+    },
 }
 
 

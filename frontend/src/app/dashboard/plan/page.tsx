@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiErrorMessage } from "@/lib/api";
+import { trackEvent, EVENTS } from "@/lib/events";
 import { useProfile, useRecommendCrop, useRecommendationHistory } from "@/hooks/use-api";
 import { useToast } from "@/hooks/use-toast";
 import type { CropRecommendationItem, Recommendation } from "@/types";
@@ -80,6 +81,10 @@ export default function PlanMyFarmPage() {
 
   const profileValid = form.location.trim().length >= 2 && Number(form.farm_size_acres) > 0;
 
+  React.useEffect(() => {
+    trackEvent(EVENTS.planWizardStarted);
+  }, []);
+
   const analyze = async () => {
     try {
       const res = await recommend.mutateAsync({
@@ -93,6 +98,10 @@ export default function PlanMyFarmPage() {
       setResult(res);
       setSelected(0);
       setStep(3);
+      trackEvent(EVENTS.planWizardCompleted, {
+        top_crop: res.crops?.[0]?.crop_name ?? null,
+      });
+      trackEvent(EVENTS.cropPlanCompleted);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       toast({

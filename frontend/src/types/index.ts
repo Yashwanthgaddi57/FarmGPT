@@ -31,6 +31,7 @@ export interface Farm {
   water_source: string;
   current_crop: string | null;
   current_season: string | null;
+  planting_date: string | null;
   latitude: number | null;
   longitude: number | null;
   created_at: string;

@@ -1,5 +1,5 @@
 """Farm schemas."""
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -18,6 +18,7 @@ class FarmCreate(BaseModel):
     water_source: WaterAvailability = "rainfed"
     current_crop: str | None = None
     current_season: Literal["kharif", "rabi", "zaid"] | None = None
+    planting_date: date | None = None  # when current_crop was sown
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
 
@@ -32,6 +33,7 @@ class FarmUpdate(BaseModel):
     water_source: WaterAvailability | None = None
     current_crop: str | None = None
     current_season: Literal["kharif", "rabi", "zaid"] | None = None
+    planting_date: date | None = None
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
 
@@ -48,6 +50,7 @@ class FarmOut(UUIDCoercionMixin):
     water_source: str
     current_crop: str | None
     current_season: str | None
+    planting_date: date | None = None
     latitude: float | None
     longitude: float | None
     created_at: datetime

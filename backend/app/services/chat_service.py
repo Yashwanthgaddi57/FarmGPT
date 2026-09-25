@@ -33,6 +33,42 @@ def language_directive(lang_hint: str | None, user_language: str | None = None) 
     return f"LANGUAGE: Reply in {name}. Keep technical terms understandable; use common English loanwords where farmers use them."
 
 
+def _crop_age_line(db: Session | None, user: User) -> str | None:
+    """Crop-age line from the farm's planting_date, when actually recorded.
+
+    Only computed when a real planting date exists — never guessed.
+    """
+    if db is None:
+        return None
+    try:
+        from datetime import date
+
+        from app.models.farm import Farm
+
+        farm = (
+            db.query(Farm)
+            .filter(
+                Farm.user_id == user.id,
+                Farm.planting_date.isnot(None),
+                Farm.current_crop.isnot(None),
+            )
+            .order_by(Farm.planting_date.desc())
+            .first()
+        )
+        if not farm:
+            return None
+        days = (date.today() - farm.planting_date).days
+        if days < 0:
+            return None
+        return (
+            f"Current crop age: {farm.current_crop} sown {days} days ago "
+            f"(planting date {farm.planting_date.isoformat()}) — use this to "
+            "tailor growth-stage advice."
+        )
+    except Exception:
+        return None
+
+
 def build_farmer_context(user: User, db=None, language_hint: str | None = None) -> str:
     """Compact farmer profile block injected into agent prompts.
     Includes exact coordinates + precision when available."""
@@ -51,6 +87,9 @@ def build_farmer_context(user: User, db=None, language_hint: str | None = None) 
         f"Soil: {user.soil_type}",
         f"Water: {user.water_availability}",
     ]
+    crop_age = _crop_age_line(db, user)
+    if crop_age:
+        parts.append(crop_age)
     directive = language_directive(language_hint, getattr(user, "language", None))
     if directive:
         parts.append(directive)

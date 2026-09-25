@@ -9,7 +9,12 @@ from app.models.market_prediction import MarketPrediction
 from app.schemas.ai_features import MarketPredictionRequest
 from app.services.activity_service import log_activity
 from app.services.location_service import resolve_location_async
-from app.services.market_service import MarketService, price_snapshot, resolve_price_context
+from app.services.market_service import (
+    MarketService,
+    find_nearest_mandis,
+    price_snapshot,
+    resolve_price_context,
+)
 
 router = APIRouter(prefix="/market", tags=["market"])
 
@@ -57,6 +62,54 @@ async def list_predictions(user: CurrentUser, db: DBSession, pagination: Paginat
     total = q.count()
     items = q.offset(pagination.offset).limit(pagination.page_size).all()
     return {"items": items, "total": total, "page": pagination.page, "page_size": pagination.page_size}
+
+
+@router.get("/compare")
+async def compare_markets(crop: str, user: CurrentUser, db: DBSession, limit: int = 5):
+    """"Where should I sell?" — price snapshot per nearby mandi.
+
+    Uses the same tiered price chain as the ticker (keyed feed > scrape >
+    labeled baseline), scoped to each mandi's market name where possible.
+    No AI calls; cached 1h per crop+market. Baseline rows are clearly
+    flagged so estimates are never presented as live prices.
+    """
+    loc = await resolve_location_async(db, user)
+    mandis = find_nearest_mandis(db, loc.latitude, loc.longitude, crop.lower(), limit=limit)
+    if not mandis:
+        return {
+            "crop": crop,
+            "location": loc.label,
+            "items": [],
+            "note": "Save your farm location to compare nearby mandis.",
+        }
+
+    items = []
+    for m in mandis:
+        snap = price_snapshot(crop, state=m["state"], district=m["district"])
+        items.append(
+            {
+                "mandi": m["name"],
+                "district": m["district"],
+                "state": m["state"],
+                "distance_km": m["distance_km"],
+                "price": snap["price"],
+                "unit": snap["unit"],
+                "trend_weekly_pct": snap["trend_weekly_pct"],
+                "source": snap["source"],
+                "is_live": snap["is_live"],
+                "as_of": snap["as_of"],
+            }
+        )
+    items.sort(key=lambda x: (-x["price"], x["distance_km"]))
+    return {
+        "crop": crop,
+        "location": loc.label,
+        "items": items,
+        "note": (
+            "Prices are per-mandi snapshots; 'est' rows are modeled "
+            "baselines, not live quotes. Call the mandi for today's rate."
+        ),
+    }
 
 
 @router.get("/history")

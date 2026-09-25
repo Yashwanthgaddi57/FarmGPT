@@ -47,12 +47,14 @@ def _count_this_month(db: Session, model, user_id: str) -> int:
 def _count_today(db: Session, model, user_id: str) -> int:
     uid = uuid.UUID(str(user_id))
     today_start = datetime.combine(date.today(), datetime.min.time(), tzinfo=timezone.utc)
-    return (
-        db.query(func.count(model.id))
-        .filter(model.user_id == uid, model.created_at >= today_start)
-        .scalar()
-        or 0
+    q = db.query(func.count(model.id)).filter(
+        model.user_id == uid, model.created_at >= today_start
     )
+    # Chat quota counts FARMER messages only (role == 'user'), not the
+    # assistant's replies — otherwise "20 messages/day" would really be 10 turns.
+    if hasattr(model, "role"):
+        q = q.filter(model.role == "user")
+    return q.scalar() or 0
 
 
 _USAGE_MODEL = {
@@ -86,15 +88,16 @@ def check_quota(db: Session, user: User, feature: str) -> None:
 
 
 def check_chat_quota(db: Session, user: User) -> None:
-    """Daily chat-message quota (all plans; free is capped, pro unlimited)."""
+    """Daily quota on farmer-sent messages (free capped, pro unlimited)."""
+    from app.models.chat import ChatMessage
+
     plan = user_plan(user)
     if is_unlimited(plan, "chat_messages_per_day"):
         return
     limit = plan_limits(plan).get("chat_messages_per_day")
     if not limit:
         return
-    used = _count_today(db, __import__(
-        "app.models.chat", fromlist=["ChatMessage"]).ChatMessage, str(user.id))
+    used = _count_today(db, ChatMessage, str(user.id))
     if used >= limit:
         raise PlanLimitExceeded(
             f"You've reached the {plan} plan limit of {limit} copilot messages per day. "

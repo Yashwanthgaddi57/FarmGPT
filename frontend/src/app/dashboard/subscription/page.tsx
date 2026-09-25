@@ -12,6 +12,7 @@ import {
   useSubscriptionPlans,
 } from "@/hooks/use-api";
 import { api } from "@/lib/api";
+import { trackEvent, EVENTS } from "@/lib/events";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -21,8 +22,13 @@ export default function SubscriptionPage() {
   const { toast } = useToast();
   const [upgrading, setUpgrading] = React.useState<string | null>(null);
 
+  React.useEffect(() => {
+    trackEvent(EVENTS.subscriptionPageViewed);
+  }, []);
+
   const upgrade = async (planId: string) => {
     setUpgrading(planId);
+    trackEvent(EVENTS.subscriptionStarted, { plan: planId });
     try {
       await api.post("/subscription/checkout", { plan: planId });
     } catch (e: unknown) {

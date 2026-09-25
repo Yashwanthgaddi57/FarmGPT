@@ -10,6 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useProfile } from "@/hooks/use-api";
+import { trackEvent, EVENTS } from "@/lib/events";
+import { calculateProfit } from "@/lib/profit-math";
 import { formatINR } from "@/lib/utils";
 
 interface CostRow {
@@ -41,18 +43,37 @@ export default function ProfitCalculatorPage() {
     if (profile?.farm_size_acres) setFarmSize(String(profile.farm_size_acres));
   }, [profile]);
 
+  // Fire once per visit (Section 34 funnel: profit_calculator_used)
+  React.useEffect(() => {
+    trackEvent(EVENTS.profitCalculatorUsed);
+  }, []);
+
   const n = (s: string) => {
     const v = parseFloat(s);
     return Number.isFinite(v) && v > 0 ? v : 0;
   };
 
   const acres = n(farmSize);
-  const totalCost = COSTS.reduce((sum, c) => sum + n(costs[c.key]), 0);
-  const production = acres * n(yieldQPerAcre); // quintals
-  const revenue = production * n(pricePerQ);
-  const profit = revenue - totalCost;
-  const profitPerAcre = acres > 0 ? profit / acres : 0;
-  const breakEven = production > 0 ? totalCost / production : 0;
+  const result = calculateProfit({
+    farmSizeAcres: acres,
+    costs: {
+      seed: n(costs["seed"]),
+      fertilizer: n(costs["fertilizer"]),
+      pesticide: n(costs["pesticide"]),
+      labor: n(costs["labor"]),
+      irrigation: n(costs["irrigation"]),
+      machinery: n(costs["machinery"]),
+      other: n(costs["other"]),
+    },
+    yieldQuintalsPerAcre: n(yieldQPerAcre),
+    pricePerQuintal: n(pricePerQ),
+  });
+  const totalCost = result.totalCost;
+  const production = result.productionQuintals;
+  const revenue = result.revenue;
+  const profit = result.profit;
+  const profitPerAcre = result.profitPerAcre;
+  const breakEven = result.breakEvenPerQuintal;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
