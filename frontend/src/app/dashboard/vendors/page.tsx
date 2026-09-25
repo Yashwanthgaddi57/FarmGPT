@@ -81,22 +81,37 @@ export default function VendorsPage() {
             longitude: p.coords.longitude,
             source: "gps",
           });
-          toast({ title: "Using your current location 📍", variant: "success" });
+          toast({ title: "Using your current location 📍", description: "Vendors re-sorted by true distance from your farm.", variant: "success" });
         } catch (e) {
           toast({ title: "Could not save location", description: apiErrorMessage(e), variant: "destructive" });
         } finally {
           setLocating(false);
         }
       },
-      () => {
+      (err) => {
         setLocating(false);
-        toast({
-          title: "Could not get your location",
-          description: "Allow location access, or save a map pin on the profile page.",
-          variant: "destructive",
-        });
+        if (err.code === err.PERMISSION_DENIED) {
+          toast({
+            title: "Location permission is blocked",
+            description:
+              "Tap the 🔒 icon (or ⋮ menu) next to the website address → Permissions → Location → Allow, then tap Use My Location again.",
+            variant: "destructive",
+          });
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          toast({
+            title: "Couldn't determine your position",
+            description: "Move to an open area and try again, or save a map pin on the profile page.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Getting your location took too long",
+            description: "Try again outdoors, or save a map pin on the profile page.",
+            variant: "destructive",
+          });
+        }
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
     );
   };
 
@@ -107,12 +122,12 @@ export default function VendorsPage() {
         <p className="text-sm text-muted-foreground">
           {you ? (
             <>
-              Around <span className="font-medium">{you.label}</span> ·{" "}
+              📍 Around <span className="font-medium">{you.label}</span> ·{" "}
               {you.precision === "gps"
-                ? "GPS precision"
+                ? "your exact location"
                 : you.precision === "map_pin"
-                  ? "map-pin precision"
-                  : "district-level"}{" "}
+                  ? "your saved pin"
+                  : "approximate (district)"}{" "}
               · sorted by distance
             </>
           ) : (

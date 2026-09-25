@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useProfile, useSaveLocation, useWeather } from "@/hooks/use-api";
+import { useMyLocation, useProfile, useSaveLocation, useWeather } from "@/hooks/use-api";
 import { apiErrorMessage } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -39,12 +39,39 @@ export default function WeatherPage() {
   const { data, isLoading, refetch, isRefetching } = useWeather(location);
   const { toast } = useToast();
   const saveLocation = useSaveLocation();
+  const { data: myLoc } = useMyLocation();
+
+  // Once the user picks a location themselves (typed or GPS), stop auto-filling
+  // from the profile — otherwise the effect fights the GPS result.
+  const manualPick = React.useRef(false);
 
   React.useEffect(() => {
-    if (profile?.district && location === undefined) {
+    if (!manualPick.current && profile?.district && location === undefined) {
       setLocation(profile.district);
     }
   }, [profile, location]);
+
+  // Human-readable reason for a failed GPS fix (browsers block re-prompting
+  // after a denial, so we must teach the user how to re-enable it).
+  const gpsError = (err: GeolocationPositionError) => {
+    if (err.code === err.PERMISSION_DENIED) {
+      return {
+        title: "Location permission is blocked",
+        description:
+          "Tap the 🔒 icon (or ⋮ menu) next to the website address → Permissions → Location → Allow, then tap Use My Location again.",
+      };
+    }
+    if (err.code === err.POSITION_UNAVAILABLE) {
+      return {
+        title: "Couldn't determine your position",
+        description: "Move to an open area and try again, or type your town / district below.",
+      };
+    }
+    return {
+      title: "Getting your location took too long",
+      description: "Try again outdoors, or type your town / district below.",
+    };
+  };
 
   // [Use My Location] — opt-in GPS (never mandatory): saves exact coordinates
   // to the profile; the backend then uses them for the forecast automatically.
@@ -66,30 +93,33 @@ export default function WeatherPage() {
             longitude: p.coords.longitude,
             source: "gps",
           });
-          setLocation(undefined); // drop manual override — refetch from saved coordinates
+          // Switch the page to the saved-coordinates forecast (backend uses
+          // exact coords automatically once they exist on the profile).
+          manualPick.current = true;
+          setLocation(undefined);
           setInput("");
-          toast({ title: "Using your current location 📍", variant: "success" });
+          await refetch();
+          toast({ title: "Using your current location 📍", description: "Forecast updated for your exact spot.", variant: "success" });
         } catch (e) {
           toast({ title: "Could not save location", description: apiErrorMessage(e), variant: "destructive" });
         } finally {
           setLocating(false);
         }
       },
-      () => {
+      (err) => {
         setLocating(false);
-        toast({
-          title: "Could not get your location",
-          description: "Allow location access, or type your town / district below.",
-          variant: "destructive",
-        });
+        toast({ ...gpsError(err), variant: "destructive" });
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
     );
   };
 
   const search = (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim()) setLocation(input.trim());
+    if (input.trim()) {
+      manualPick.current = true;
+      setLocation(input.trim());
+    }
   };
 
   if (isLoading) {
@@ -106,8 +136,20 @@ export default function WeatherPage() {
       <div className="space-y-3">
         <div>
           <h1 className="text-2xl font-bold">Weather</h1>
-          <p className="text-sm text-muted-foreground">
-            Forecast for your farm: {data?.location ?? "…"}
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <MapPin className="h-4 w-4 shrink-0 text-leaf-600" aria-hidden />
+            <span className="font-medium text-foreground">
+              {myLoc?.label || data?.location || "…"}
+            </span>
+            {myLoc && (myLoc.precision === "gps" || myLoc.precision === "map_pin") ? (
+              <Badge variant="success" className="text-[10px]">
+                📍 Your exact location
+              </Badge>
+            ) : myLoc ? (
+              <Badge variant="warning" className="text-[10px]">
+                Approximate (district)
+              </Badge>
+            ) : null}
           </p>
         </div>
         <form onSubmit={search} className="flex flex-wrap gap-2">
