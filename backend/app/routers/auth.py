@@ -67,17 +67,23 @@ async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         session = await supabase_sign_up(payload.email, payload.password, metadata)
     except Exception as e:
         raise AuthError(str(e)) from e
-    return JSONResponse(
-        status_code=status.HTTP_201_CREATED,
-        content={
-            "message": "Registration successful.",
-            "access_token": session["access_token"],
-            "refresh_token": session["refresh_token"],
-            "expires_in": session.get("expires_in", 3600),
-            "token_type": session.get("token_type", "bearer"),
-            "user": session.get("user", {}),
-        },
-    )
+    content: dict = {
+        "message": "Registration successful.",
+        "user": session.get("user", {}),
+    }
+    if session.get("access_token"):
+        content.update(
+            access_token=session["access_token"],
+            refresh_token=session["refresh_token"],
+            expires_in=session.get("expires_in") or 3600,
+            token_type=session.get("token_type", "bearer"),
+        )
+    else:
+        content["message"] = (
+            "Registration successful. Please check your email to confirm your account."
+        )
+        content["needs_email_confirmation"] = True
+    return JSONResponse(status_code=status.HTTP_201_CREATED, content=content)
 
 
 @router.post("/login")

@@ -36,18 +36,110 @@ def _supabase_msg(resp: httpx.Response) -> str:
     return resp.text
 
 
+def _service_key_ok() -> bool:
+    """True when SUPABASE_SERVICE_KEY looks like a real service-role JWT.
+
+    Supabase service-role keys are 3-segment JWTs. The render.yaml default is
+    the placeholder 'your-service-role-key' (no dots), which the admin API
+    rejects with 'invalid JWT'. Detect that and fall back to the anon signup
+    path instead of breaking signup when the secret isn't configured.
+    """
+    key = settings.SUPABASE_SERVICE_KEY or ""
+    return bool(key) and "your" not in key.lower() and key.count(".") == 2
+
+
+def _normalize_session(resp_json: dict) -> dict:
+    """Unify the two Supabase response shapes into one auth contract."""
+    sess = resp_json.get("session") or {}
+    user = resp_json.get("user") or {}
+    return {
+        "access_token": sess.get("access_token"),
+        "refresh_token": sess.get("refresh_token"),
+        "expires_in": sess.get("expires_in"),
+        "token_type": sess.get("token_type", "bearer"),
+        "user": user,
+        "message": resp_json.get("message", ""),
+    }
+
+
+async def _admin_signup_and_signin(
+    client: httpx.AsyncClient,
+    email: str,
+    password: str,
+    admin_headers: dict,
+    anon_headers: dict,
+    user_data: dict,
+) -> dict:
+    """Create a CONFIRMED user via the admin API (no email), then sign in."""
+    create = await client.post(
+        "/auth/v1/admin/users",
+        headers=admin_headers,
+        json={
+            "email": email,
+            "password": password,
+            "email_confirm": True,
+            "user_metadata": user_data,
+        },
+    )
+    if create.status_code >= 400 and "already registered" not in _supabase_msg(create).lower():
+        raise RuntimeError(_supabase_msg(create))
+
+    session = await client.post(
+        "/auth/v1/token?grant_type=password",
+        headers=anon_headers,
+        json={"email": email, "password": password},
+    )
+    if session.status_code >= 400 and "confirm" in _supabase_msg(session).lower():
+        # Older deploy left the account unconfirmed; confirm it, then retry.
+        await _mark_email_confirmed(client, admin_headers, email)
+        session = await client.post(
+            "/auth/v1/token?grant_type=password",
+            headers=anon_headers,
+            json={"email": email, "password": password},
+        )
+    if session.status_code >= 400:
+        raise RuntimeError(_supabase_msg(session))
+    return _normalize_session(session.json())
+
+
+async def _anon_signup(
+    client: httpx.AsyncClient,
+    email: str,
+    password: str,
+    anon_headers: dict,
+    user_data: dict,
+) -> dict:
+    """Standard anon signup (email-confirmation path). Respects project settings."""
+    resp = await client.post(
+        "/auth/v1/signup",
+        headers=anon_headers,
+        json={"email": email, "password": password, "data": user_data},
+    )
+    if resp.status_code >= 400:
+        msg = _supabase_msg(resp)
+        if "rate limit" in msg.lower():
+            raise RuntimeError(
+                "Too many signup attempts right now. Please wait a few minutes and try again."
+            )
+        raise RuntimeError(msg)
+    return _normalize_session(resp.json())
+
+
 async def supabase_sign_up(email: str, password: str, metadata: dict | None = None) -> dict:
-    """Create an auth user and return a live access session.
+    """Create an auth user and return a normalized session payload.
 
-    The user is created via the service-role admin API with the email already
-    confirmed, then a session is issued via the password grant. This sends NO
-    confirmation email: on Supabase's free tier the email-confirmation signup
-    path is aggressively rate-limited ("email rate limit exceeded"), which
-    blocks manual account creation entirely. Admin create + password grant are
-    not email-based, so signup works reliably and the user is signed in at once.
+    Admin path (when SUPABASE_SERVICE_KEY is a real service-role JWT): creates
+    the user already confirmed, then mints a session via the password grant.
+    Sends NO confirmation email, sidestepping Supabase's free-tier email rate
+    limit ("email rate limit exceeded").
 
-    `metadata` is stored as `user_metadata` so `get_current_user` can hydrate
-    the full profile on the first authenticated request.
+    Anon fallback (when the service key is unset/placeholder): the standard
+    email-confirmation signup. This keeps registration working on projects
+    where the service key hasn't been configured yet — the result simply has
+    `access_token=None` and needs_email_confirmation=True.
+
+    `metadata` is stored as user_metadata so get_current_user can hydrate the
+    full profile on the first authenticated request.
     """
     admin_headers = {
         "apikey": settings.SUPABASE_ANON_KEY,
@@ -57,41 +149,11 @@ async def supabase_sign_up(email: str, password: str, metadata: dict | None = No
     user_data = metadata or {}
 
     async with httpx.AsyncClient(base_url=settings.SUPABASE_URL, timeout=30) as client:
-        # 1) Create the user, confirmed — via the admin API (no email sent).
-        create = await client.post(
-            "/auth/v1/admin/users",
-            headers=admin_headers,
-            json={
-                "email": email,
-                "password": password,
-                "email_confirm": True,
-                "user_metadata": user_data,
-            },
-        )
-        if create.status_code >= 400:
-            # Allow retries against accounts created by earlier deploys.
-            if "already registered" not in _supabase_msg(create).lower():
-                raise RuntimeError(_supabase_msg(create))
-
-        # 2) Mint a session via the password grant. The user is confirmed, so
-        #    no confirmation email is sent -> immune to the email rate limit.
-        session = await client.post(
-            "/auth/v1/token?grant_type=password",
-            headers=anon_headers,
-            json={"email": email, "password": password},
-        )
-        if session.status_code >= 400 and "confirm" in _supabase_msg(session).lower():
-            # An older deploy may have left the account unconfirmed. Confirm it
-            # via the admin API and retry the password grant once.
-            await _mark_email_confirmed(client, admin_headers, email)
-            session = await client.post(
-                "/auth/v1/token?grant_type=password",
-                headers=anon_headers,
-                json={"email": email, "password": password},
+        if _service_key_ok():
+            return await _admin_signup_and_signin(
+                client, email, password, admin_headers, anon_headers, user_data
             )
-        if session.status_code >= 400:
-            raise RuntimeError(_supabase_msg(session))
-        return session.json()
+        return await _anon_signup(client, email, password, anon_headers, user_data)
 
 
 async def _mark_email_confirmed(client: httpx.AsyncClient, admin_headers: dict, email: str) -> None:
