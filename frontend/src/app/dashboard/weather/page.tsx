@@ -12,14 +12,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { CloudRain, CloudSun, Droplets, MapPin, Snowflake, Sun, Wind } from "lucide-react";
+import { CloudRain, CloudSun, Crosshair, Droplets, Loader2, MapPin, Snowflake, Sun, Wind } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useProfile, useWeather } from "@/hooks/use-api";
+import { useProfile, useSaveLocation, useWeather } from "@/hooks/use-api";
+import { apiErrorMessage } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 const ACTION_VARIANT: Record<string, "success" | "warning" | "destructive" | "secondary"> = {
@@ -34,14 +35,57 @@ export default function WeatherPage() {
   const { data: profile } = useProfile();
   const [location, setLocation] = React.useState<string | undefined>(undefined);
   const [input, setInput] = React.useState("");
+  const [locating, setLocating] = React.useState(false);
   const { data, isLoading, refetch, isRefetching } = useWeather(location);
   const { toast } = useToast();
+  const saveLocation = useSaveLocation();
 
   React.useEffect(() => {
     if (profile?.district && location === undefined) {
       setLocation(profile.district);
     }
   }, [profile, location]);
+
+  // [Use My Location] — opt-in GPS (never mandatory): saves exact coordinates
+  // to the profile; the backend then uses them for the forecast automatically.
+  const useGps = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "Location not available",
+        description: "This device or browser doesn't support location. Type your town or district instead.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (p) => {
+        try {
+          await saveLocation.mutateAsync({
+            latitude: p.coords.latitude,
+            longitude: p.coords.longitude,
+            source: "gps",
+          });
+          setLocation(undefined); // drop manual override — refetch from saved coordinates
+          setInput("");
+          toast({ title: "Using your current location 📍", variant: "success" });
+        } catch (e) {
+          toast({ title: "Could not save location", description: apiErrorMessage(e), variant: "destructive" });
+        } finally {
+          setLocating(false);
+        }
+      },
+      () => {
+        setLocating(false);
+        toast({
+          title: "Could not get your location",
+          description: "Allow location access, or type your town / district below.",
+          variant: "destructive",
+        });
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const search = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +110,21 @@ export default function WeatherPage() {
             Forecast for your farm: {data?.location ?? "…"}
           </p>
         </div>
-        <form onSubmit={search} className="flex gap-2">
+        <form onSubmit={search} className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={useGps}
+            disabled={locating || saveLocation.isPending}
+            className="min-h-[44px] shrink-0 gap-1.5"
+          >
+            {locating || saveLocation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Crosshair className="h-4 w-4" />
+            )}
+            📍 Use My Location
+          </Button>
           <Input
             placeholder="Change location…"
             value={input}

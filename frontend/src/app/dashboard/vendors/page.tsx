@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import dynamic from "next/dynamic";
-import { MapPin, Navigation, Phone, Store } from "lucide-react";
+import { Crosshair, Loader2, MapPin, Navigation, Phone, Store } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNearbyVendors, useSaveLocation } from "@/hooks/use-api";
+import { apiErrorMessage } from "@/lib/api";
 import type { FarmerLocation, VendorItem } from "@/hooks/use-api";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 const LeafletMap = dynamic(() => import("@/components/location/VendorMap"), {
@@ -44,6 +46,8 @@ export default function VendorsPage() {
   const [category, setCategory] = React.useState("");
   const [crop, setCrop] = React.useState("");
   const [radius, setRadius] = React.useState(50); // spec D4: default 50 km
+  const [locating, setLocating] = React.useState(false);
+  const { toast } = useToast();
   const { data, isLoading } = useNearbyVendors({
     category: category || undefined,
     crop: crop || undefined,
@@ -55,30 +59,46 @@ export default function VendorsPage() {
   const effectiveRadius = data?.radius_km ?? radius;
   const widened = effectiveRadius > radius;
 
-  // No saved pin yet -> ask for GPS once, on page open. Result is saved to the
-  // profile so weather, market and vendors all switch to exact coordinates.
-  const askedGps = React.useRef(false);
+  // [📍 Use My Location] — explicit opt-in (permission UX per prompt §12).
+  // Saves exact coordinates to the profile so vendors, weather and market all
+  // switch to GPS precision. Manual map pin remains available on the profile.
   const saveLocation = useSaveLocation();
-  React.useEffect(() => {
-    if (askedGps.current || isLoading || !data) return;
-    askedGps.current = true;
-    if (data.location.precision !== "district") return;
-    if (!navigator.geolocation) return;
+  const useGps = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "Location not available",
+        description: "This device doesn't support location. Save a map pin on the profile page instead.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (p) => {
-        saveLocation.mutate({
-          latitude: p.coords.latitude,
-          longitude: p.coords.longitude,
-          source: "gps",
-        });
+      async (p) => {
+        try {
+          await saveLocation.mutateAsync({
+            latitude: p.coords.latitude,
+            longitude: p.coords.longitude,
+            source: "gps",
+          });
+          toast({ title: "Using your current location 📍", variant: "success" });
+        } catch (e) {
+          toast({ title: "Could not save location", description: apiErrorMessage(e), variant: "destructive" });
+        } finally {
+          setLocating(false);
+        }
       },
       () => {
-        /* denied/unavailable — stay on district-level results */
+        setLocating(false);
+        toast({
+          title: "Could not get your location",
+          description: "Allow location access, or save a map pin on the profile page.",
+          variant: "destructive",
+        });
       },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 10000 }
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, isLoading]);
+  };
 
   return (
     <div className="space-y-6">
@@ -102,6 +122,19 @@ export default function VendorsPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="outline"
+          onClick={useGps}
+          disabled={locating || saveLocation.isPending}
+          className="min-h-[44px] shrink-0 gap-1.5"
+        >
+          {locating || saveLocation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Crosshair className="h-4 w-4" />
+          )}
+          📍 Use My Location
+        </Button>
         <Tabs value={category} onValueChange={setCategory}>
           <TabsList>
             {CATEGORIES.map((c) => (
@@ -223,11 +256,13 @@ export default function VendorsPage() {
       {data && data.location.precision === "district" && (
         <Card className="border-amber-200 bg-amber-50/60">
           <CardContent className="py-4 text-sm">
-            Currently using district-level location. Save your exact pin (GPS or map) on the{" "}
+            Currently using district-level location — distances are approximate. Tap{" "}
+            <span className="font-medium">📍 Use My Location</span> above for GPS-accurate results, or save a
+            map pin on the{" "}
             <a href="/dashboard/profile" className="font-medium text-leaf-700 underline">
               profile page
-            </a>{" "}
-            for accurate distances. <MapPin className="ml-1 inline h-4 w-4" />
+            </a>
+            . <MapPin className="ml-1 inline h-4 w-4" />
           </CardContent>
         </Card>
       )}
