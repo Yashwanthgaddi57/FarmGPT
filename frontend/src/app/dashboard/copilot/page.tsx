@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Bot, Loader2, Mic, MicOff, Send, Trash2, User, Volume2, VolumeX } from "lucide-react";
+import { Bot, Mic, MicOff, Send, Trash2, User, Volume2, VolumeX } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -344,7 +344,11 @@ export default function CopilotPage() {
                   <Bot className="h-4 w-4" />
                 </span>
                 <div className="flex items-center gap-2 rounded-2xl border bg-card px-4 py-3 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <div className="thinking-dots flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-leaf-500" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-leaf-500" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-leaf-500" />
+                  </div>
                   AgriGPT is thinking…
                 </div>
               </div>
@@ -386,7 +390,10 @@ export default function CopilotPage() {
                   onClick={toggleListening}
                   aria-label={listening ? "Stop listening" : "Ask by voice"}
                   title={listening ? "Stop listening" : "Ask by voice"}
-                  className={cn("h-12 w-12 shrink-0 md:h-11 md:w-11", listening && "animate-pulse")}
+                  className={cn(
+                    "h-12 w-12 shrink-0 md:h-11 md:w-11 tap-subtle",
+                    listening && "voice-active"
+                  )}
                 >
                   {listening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
                 </Button>

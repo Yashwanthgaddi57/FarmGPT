@@ -35,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { MobileBottomNav } from "@/components/dashboard/mobile-nav";
+import { PageAnimatePresence, PageTransition } from "@/components/page-transition";
 import { useAuth } from "@/contexts/auth-context";
 import {
   useMarkNotificationsRead,
@@ -221,7 +222,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <NotificationBell />
           </div>
         </header>
-        <main className="flex-1 p-4 pb-24 sm:p-6 lg:pb-6">{children}</main>
+        <main className="flex-1 p-4 pb-24 sm:p-6 lg:pb-6">
+          <PageAnimatePresence>
+            <PageTransition key={pathname}>{children}</PageTransition>
+          </PageAnimatePresence>
+        </main>
       </div>
 
       {/* Mobile bottom navigation — primary actions 1 tap away (prompt §4) */}

@@ -7,6 +7,7 @@
  * engine / live APIs — nothing is invented; sections hide when data is absent.
  */
 import * as React from "react";
+import { motion } from "framer-motion";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -31,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardTicker } from "@/components/dashboard/price-ticker";
+import { FadeIn } from "@/components/page-transition";
 import { useProfile, useTodayPlan, useWeather } from "@/hooks/use-api";
 import { formatCompactINR, formatINR, cn } from "@/lib/utils";
 import type { WeatherDay } from "@/types";
@@ -89,6 +91,10 @@ export default function FarmHomePage() {
   const { data: plan, isLoading, error, refetch } = useTodayPlan();
   const { data: weather, isLoading: weatherLoading } = useWeather(profile?.district ?? undefined);
   const [showFullPlan, setShowFullPlan] = React.useState(false);
+  // Per-priority "Why this recommendation?" collapsible state (prompt §9).
+  const [whyOpen, setWhyOpen] = React.useState<Record<string, boolean>>({});
+  const toggleWhy = (rank: number | string) =>
+    setWhyOpen((prev) => ({ ...prev, [rank]: !prev[rank] }));
 
   const name = profile?.name?.split(" ")[0] ?? "Farmer";
   const farm = plan?.farm;
@@ -179,9 +185,56 @@ export default function FarmHomePage() {
         </Button>
       </header>
 
+      {/* Desktop "Farm at a glance" summary row (§9) — hidden on mobile where the
+          greeting already shows the same facts. */}
+      {farm && farm.size_acres > 0 && (
+        <div className="hidden grid-cols-3 gap-3 lg:grid">
+          <div className="rounded-xl border bg-card p-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Farm</p>
+            <p className="mt-0.5 text-sm font-bold">
+              🌱 {farm.size_acres} acres{farm.crop ? ` · ${farm.crop}` : ""}
+            </p>
+          </div>
+          <div className="rounded-xl border bg-card p-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Crop age</p>
+            <p className="mt-0.5 text-sm font-bold">
+              📅 Day {farm.crop_age_days ?? "—"}
+            </p>
+          </div>
+          <div className="rounded-xl border bg-card p-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Location</p>
+            <p className="mt-0.5 truncate text-sm font-bold">
+              📍 {farm.district ?? "India"}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- Quick Actions (§6: 1-tap reach, right after farm context) ---------- */}
+      <FadeIn delay={0}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+          {quickActions.map((a) => (
+            <Link
+              key={a.href}
+              href={a.href}
+              className={cn(
+                "tap-subtle flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-xl border bg-card p-4 text-center text-sm font-medium hover:-translate-y-0.5 hover:shadow-md",
+                a.primary ? "border-leaf-300 bg-leaf-50/60 text-leaf-800 dark:bg-leaf-950/20 dark:text-leaf-200" : "hover:border-leaf-300"
+              )}
+            >
+              <span className={cn("flex h-10 w-10 items-center justify-center rounded-lg", a.primary ? "bg-leaf-600 text-white" : "bg-leaf-600/10 text-leaf-700")}>
+                <a.icon className="h-5 w-5" />
+              </span>
+              {a.label}
+            </Link>
+          ))}
+        </div>
+        </FadeIn>
+
       {/* ---------- Urgent alerts (only when something needs attention) ---------- */}
       {alerts.length > 0 ? (
-        <section aria-label="Urgent alerts" className="space-y-2">
+        <FadeIn delay={0}>
+          <section aria-label="Urgent alerts" className="space-y-2">
           {alerts.map((a, i) => {
             const Icon = a.icon;
             return (
@@ -205,12 +258,14 @@ export default function FarmHomePage() {
             );
           })}
         </section>
+        </FadeIn>
       ) : (
         plan && <p className="text-sm text-muted-foreground">Nothing urgent today 👍</p>
       )}
 
       {/* ---------- TODAY'S FARM PLAN — the most important section (§3) ---------- */}
-      <Card className="border-leaf-300 shadow-sm">
+      <FadeIn delay={0}>
+        <Card className="border-leaf-300 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
             <span>🌱 Today&apos;s Farm Plan</span>
@@ -249,6 +304,8 @@ export default function FarmHomePage() {
           {plan && plan.priorities.map((p, idx) => {
             const Icon = ICONS[p.icon] ?? Sprout;
             const meta = LEVEL_META[p.level] ?? { dot: "⚪", label: p.level };
+            const whyExpanded = whyOpen[p.rank] ?? false;
+            const showWhy = showFullPlan || idx < 3;
             return (
               <div key={p.rank} className="rounded-xl border bg-card p-3">
                 <div className="flex items-start gap-3">
@@ -262,8 +319,30 @@ export default function FarmHomePage() {
                       <Badge variant="outline" className="text-[10px]">{meta.label}</Badge>
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">{p.detail}</p>
-                    {(showFullPlan || idx < 3) && (
-                      <p className="mt-1 text-[11px] italic text-muted-foreground/80">Why: {p.basis}</p>
+                    {showWhy && p.basis && (
+                      <button
+                        type="button"
+                        onClick={() => toggleWhy(p.rank)}
+                        aria-expanded={whyExpanded}
+                        className="mt-1 flex items-center gap-1 text-[11px] font-medium text-leaf-700 hover:text-leaf-800 dark:text-leaf-300"
+                      >
+                        <span aria-hidden>{whyExpanded ? "▲" : "▼"}</span>
+                        {whyExpanded ? "Hide reasoning" : "Why this recommendation?"}
+                      </button>
+                    )}
+                    {showWhy && whyExpanded && p.basis && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                        className="overflow-hidden"
+                      >
+                        <p className="mt-1.5 rounded-lg bg-muted/60 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
+                          <span className="font-medium text-foreground">Why: </span>
+                          {p.basis}
+                        </p>
+                      </motion.div>
                     )}
                   </div>
                 </div>
@@ -285,9 +364,11 @@ export default function FarmHomePage() {
           )}
         </CardContent>
       </Card>
+      </FadeIn>
 
       {/* ---------- Weather — simple 3-day card (§3) ---------- */}
-      <Card>
+      <FadeIn delay={40}>
+        <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center justify-between text-base">
             <span>🌦️ Weather</span>
@@ -344,9 +425,11 @@ export default function FarmHomePage() {
           )}
         </CardContent>
       </Card>
+      </FadeIn>
 
       {/* ---------- Crop health — prominent scan CTA (§3, §7) ---------- */}
-      <Card>
+      <FadeIn delay={80}>
+        <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">🌿 Crop Health</CardTitle>
         </CardHeader>
@@ -381,9 +464,11 @@ export default function FarmHomePage() {
           </div>
         </CardContent>
       </Card>
+      </FadeIn>
 
       {/* ---------- Market — price with unit, timestamp and source (§3, §13) ---------- */}
-      <Card>
+      <FadeIn delay={120}>
+        <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">📈 Market</CardTitle>
         </CardHeader>
@@ -416,9 +501,11 @@ export default function FarmHomePage() {
           )}
         </CardContent>
       </Card>
+      </FadeIn>
 
       {/* ---------- Farm economics — 3 numbers + details (§3, §14) ---------- */}
-      <Card>
+      <FadeIn delay={160}>
+        <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">💰 Farm Economics</CardTitle>
         </CardHeader>
@@ -455,28 +542,12 @@ export default function FarmHomePage() {
           </Button>
         </CardContent>
       </Card>
+      </FadeIn>
 
-      {/* ---------- Realtime mandi price ticker (supporting info) ---------- */}
-      <DashboardTicker />
-
-      {/* ---------- Quick actions (§6: 1-tap reach) ---------- */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
-        {quickActions.map((a) => (
-          <Link
-            key={a.href}
-            href={a.href}
-            className={cn(
-              "flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-xl border bg-card p-4 text-center text-sm font-medium transition-all hover:-translate-y-0.5 hover:shadow-md",
-              a.primary ? "border-leaf-300 bg-leaf-50/60 text-leaf-800 dark:bg-leaf-950/20 dark:text-leaf-200" : "hover:border-leaf-300"
-            )}
-          >
-            <span className={cn("flex h-10 w-10 items-center justify-center rounded-lg", a.primary ? "bg-leaf-600 text-white" : "bg-leaf-600/10 text-leaf-700")}>
-              <a.icon className="h-5 w-5" />
-            </span>
-            {a.label}
-          </Link>
-        ))}
-      </div>
+{/* ---------- Realtime mandi price ticker (supporting info) ---------- */}
+      <FadeIn delay={200}>
+        <DashboardTicker />
+      </FadeIn>
     </div>
   );
 }
