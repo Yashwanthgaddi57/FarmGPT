@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from app.core.deps import CurrentUser, DBSession
+from app.core.plans_service import check_chat_quota
 from app.schemas.ai_features import ChatMessageCreate, ChatMessageOut, ChatSessionCreate, ChatSessionOut
 from app.services.chat_service import ChatService
 
@@ -35,11 +36,13 @@ async def delete_session(session_id: str, user: CurrentUser, db: DBSession):
 @router.post("/messages")
 async def send_message(payload: ChatMessageCreate, user: CurrentUser, db: DBSession):
     """Send a message; the coordinator agent routes to specialists."""
+    check_chat_quota(db, user)
     session, user_msg, assistant_msg, meta = await ChatService(db).send_message(
         user=user,
         session_id=payload.session_id,
         content=payload.content,
         forced_agent=payload.agent,
+        language=payload.language,
     )
     return {
         "session_id": str(session.id),
@@ -56,6 +59,7 @@ async def send_message_stream(payload: ChatMessageCreate, user: CurrentUser, db:
     (text chunks), done (final ids). Errors degrade to a full-message
     delta via the service's non-streaming fallback.
     """
+    check_chat_quota(db, user)
 
     async def event_gen():
         try:
@@ -64,6 +68,7 @@ async def send_message_stream(payload: ChatMessageCreate, user: CurrentUser, db:
                 session_id=payload.session_id,
                 content=payload.content,
                 forced_agent=payload.agent,
+                language=payload.language,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:  # last-resort guard: never leave the stream open

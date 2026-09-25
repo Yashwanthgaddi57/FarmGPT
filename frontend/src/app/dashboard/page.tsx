@@ -18,7 +18,14 @@ import {
   AlertTriangle,
   ArrowRight,
   Bug,
+  Calculator,
+  Camera,
   CloudRain,
+  Droplets,
+  LineChart as LineChartIcon,
+  MapPin,
+  MessageSquareHeart,
+  ScanSearch,
   Sprout,
   TrendingUp,
   Wallet,
@@ -88,6 +95,16 @@ export default function DashboardPage() {
     },
   ];
 
+  const farm = data.farm;
+
+  const quickActions = [
+    { href: "/dashboard/plan", label: "Plan My Farm", icon: Sprout },
+    { href: "/dashboard/disease", label: "Analyze Crop", icon: Camera },
+    { href: "/dashboard/market", label: "Check Market", icon: TrendingUp },
+    { href: "/dashboard/profit-calculator", label: "Calculate Profit", icon: Calculator },
+    { href: "/dashboard/copilot", label: "Ask AgriGPT", icon: MessageSquareHeart },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -98,11 +115,157 @@ export default function DashboardPage() {
           </p>
         </div>
         <Button asChild>
-          <Link href="/dashboard/crops">
-            Ask Crop Advisor <ArrowRight className="h-4 w-4" />
+          <Link href="/dashboard/plan">
+            Plan My Farm <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
       </div>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {quickActions.map((a) => (
+          <Link
+            key={a.href}
+            href={a.href}
+            className="flex flex-col items-center gap-2 rounded-xl border bg-card p-4 text-center text-sm font-medium transition-all hover:-translate-y-0.5 hover:border-leaf-300 hover:shadow-md"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-leaf-600/10 text-leaf-700">
+              <a.icon className="h-5 w-5" />
+            </span>
+            {a.label}
+          </Link>
+        ))}
+      </div>
+
+      {/* My Farm + Today */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MapPin className="h-4 w-4 text-leaf-600" /> My Farm
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5 text-sm">
+            <Row k="Farm size" v={`${farm?.farm_size_acres ?? 0} acres`} />
+            <Row k="Location" v={[farm?.village, farm?.district].filter(Boolean).join(", ") || "—"} />
+            <Row k="Current crop" v={<span className="capitalize">{farm?.current_crop ?? "—"}</span>} />
+            <Row k="Season" v={<span className="capitalize">{farm?.current_season ?? "—"}</span>} />
+            <Row k="Water source" v={<span className="capitalize">{farm?.water_source ?? "—"}</span>} />
+            <Row k="Soil" v={<span className="capitalize">{farm?.soil_type ?? "—"}</span>} />
+            <Link href="/dashboard/profile" className="mt-2 inline-block text-xs text-leaf-600 underline">
+              Update farm profile
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CloudRain className="h-4 w-4 text-sky-600" /> Today&apos;s farm actions
+            </CardTitle>
+            <CardDescription>Decision-support suggestions — verify before acting</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {widgets.ai_recommendation ? (
+              <p className="flex items-start gap-2">
+                <CloudRain className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+                <span>
+                  <strong>Weather:</strong> {widgets.ai_recommendation}
+                </span>
+              </p>
+            ) : (
+              <p className="flex items-start gap-2">
+                <CloudRain className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+                <span>
+                  <strong>Weather:</strong> forecast loading — check the{" "}
+                  <Link className="text-leaf-600 underline" href="/dashboard/weather">weather page</Link>.
+                </span>
+              </p>
+            )}
+            <p className="flex items-start gap-2">
+              <Sprout className="mt-0.5 h-4 w-4 shrink-0 text-leaf-600" />
+              <span>
+                <strong>Crop:</strong> {farm?.current_crop ?? "Set your crop"} —{" "}
+                <span className="capitalize">{farm?.current_season}</span> season.
+              </span>
+            </p>
+            {widgets.weather_alerts.length > 0 ? (
+              <p className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <span>
+                  <strong>Risk:</strong> {widgets.weather_alerts[0]}
+                </span>
+              </p>
+            ) : (
+              <p className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <span>
+                  <strong>Risk:</strong> No hazardous weather flagged for the next 7 days.
+                </span>
+              </p>
+            )}
+            {widgets.market_recommendations.length > 0 && (
+              <p className="flex items-start gap-2">
+                <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-leaf-600" />
+                <span>
+                  <strong>Market:</strong> {widgets.market_recommendations[0].crop} —{" "}
+                  {widgets.market_recommendations[0].recommendation.replace(/_/g, " ")} ({Math.abs(widgets.market_recommendations[0].trend_weekly).toFixed(1)}% this week).
+                </span>
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Crop health */}
+      {data.crop_health && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between text-base">
+              <span className="flex items-center gap-2">
+                <ScanSearch className="h-4 w-4 text-leaf-600" /> Crop Health
+              </span>
+              <Link href="/dashboard/disease" className="text-xs font-normal text-leaf-600 underline">
+                {data.crop_health.open_issues > 0
+                  ? `${data.crop_health.open_issues} open issue${data.crop_health.open_issues > 1 ? "s" : ""} — view all`
+                  : "View scans"}
+              </Link>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.crop_health.recent_scans.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No scans in the last 30 days. <Link className="text-leaf-600 underline" href="/dashboard/disease">Scan a crop photo</Link>.
+              </p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {data.crop_health.recent_scans.map((s) => (
+                  <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3">
+                    {s.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={s.image_url} alt={s.crop} className="h-12 w-12 rounded-lg object-cover" />
+                    ) : (
+                      <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+                        <ScanSearch className="h-5 w-5 text-muted-foreground" />
+                      </span>
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium capitalize">{s.crop}</p>
+                      <p className="truncate text-xs text-muted-foreground">{s.disease_name}</p>
+                      <Badge
+                        variant={s.is_healthy ? "success" : s.followup_status === "resolved" || s.followup_status === "treated" ? "secondary" : "warning"}
+                        className="mt-1 text-[10px]"
+                      >
+                        {s.is_healthy ? "healthy" : (s.followup_status ?? s.severity)}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Realtime mandi price ticker */}
       <DashboardTicker />
@@ -308,5 +471,14 @@ function ChartCard({
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>
+  );
+}
+
+function Row({ k, v }: { k: string; v: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="shrink-0 text-muted-foreground">{k}</span>
+      <span className="text-right font-medium">{v}</span>
+    </div>
   );
 }

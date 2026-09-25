@@ -5,6 +5,8 @@ import time
 import uuid
 from datetime import date, timedelta
 
+from sqlalchemy import func, or_
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -124,6 +126,17 @@ async def get_dashboard(db: Session, user: User) -> dict:
 
     return {
         "location": {"label": loc.label, "precision": loc.precision, "latitude": loc.latitude, "longitude": loc.longitude},
+        "farm": {
+            "farm_size_acres": float(user.farm_size_acres or 0),
+            "village": user.village,
+            "district": user.district,
+            "state": user.state,
+            "soil_type": user.soil_type,
+            "water_source": user.water_availability,
+            "current_crop": current_crop,
+            "current_season": _season_now(),
+        },
+        "crop_health": _crop_health_summary(db, uid),
         "widgets": {
             "current_crop": current_crop,
             "current_season": _season_now(),
@@ -163,6 +176,50 @@ def _season_now() -> str:
     if m in (11, 12, 1, 2, 3):
         return "rabi"
     return "zaid"
+
+
+def _crop_health_summary(db: Session, uid) -> dict:
+    """Recent scans + open issues for the dashboard Crop Health card."""
+    try:
+        since = date.today() - timedelta(days=30)
+        recent = (
+            db.query(DiseaseReport)
+            .filter(DiseaseReport.user_id == uid, DiseaseReport.created_at >= since)
+            .order_by(DiseaseReport.created_at.desc())
+            .limit(3)
+            .all()
+        )
+        open_count = (
+            db.query(DiseaseReport)
+            .filter(
+                DiseaseReport.user_id == uid,
+                DiseaseReport.is_healthy.is_(False),
+                or_(
+                    DiseaseReport.followup_status.in_(["open", "monitoring"]),
+                    DiseaseReport.followup_status.is_(None),
+                ),
+            )
+            .count()
+        )
+        return {
+            "recent_scans": [
+                {
+                    "id": str(r.id),
+                    "crop": r.crop,
+                    "disease_name": r.disease_name,
+                    "is_healthy": r.is_healthy,
+                    "severity": r.severity,
+                    "followup_status": r.followup_status or ("open" if not r.is_healthy else None),
+                    "image_url": r.image_url,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in recent
+            ],
+            "open_issues": open_count or 0,
+        }
+    except Exception as e:
+        logger.warning("Crop health summary failed: %s", e)
+        return {"recent_scans": [], "open_issues": 0}
 
 
 async def _weather_lite(location: str, coordinates: tuple[float, float] | None = None) -> dict:

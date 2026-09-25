@@ -14,8 +14,26 @@ logger = logging.getLogger("app.services.chat")
 
 TITLE_MAX = 60
 
+LANGUAGE_NAMES = {
+    "en": "English",
+    "hi": "Hindi (Devanagari script)",
+    "te": "Telugu (Telugu script)",
+    "ta": "Tamil (Tamil script)",
+    "kn": "Kannada (Kannada script)",
+    "mr": "Marathi (Devanagari script)",
+}
 
-def build_farmer_context(user: User, db=None) -> str:
+
+def language_directive(lang_hint: str | None, user_language: str | None = None) -> str:
+    """One-line instruction appended to the farmer context."""
+    code = (lang_hint or user_language or "en").lower()
+    name = LANGUAGE_NAMES.get(code)
+    if not name:
+        return ""
+    return f"LANGUAGE: Reply in {name}. Keep technical terms understandable; use common English loanwords where farmers use them."
+
+
+def build_farmer_context(user: User, db=None, language_hint: str | None = None) -> str:
     """Compact farmer profile block injected into agent prompts.
     Includes exact coordinates + precision when available."""
     if user.latitude is not None and user.longitude is not None:
@@ -33,6 +51,9 @@ def build_farmer_context(user: User, db=None) -> str:
         f"Soil: {user.soil_type}",
         f"Water: {user.water_availability}",
     ]
+    directive = language_directive(language_hint, getattr(user, "language", None))
+    if directive:
+        parts.append(directive)
     return "\n".join(parts)
 
 
@@ -107,6 +128,32 @@ class ChatService:
         context = build_farmer_context(user, self.db)
         return session, history, context
 
+    def _prepare_turn_with_lang(
+        self, user: User, session_id: str | None, content: str, language: str | None
+    ) -> tuple[ChatSession, list[dict], str]:
+        """Like _prepare_turn but with the client's language hint in context."""
+        if session_id:
+            session = self.get_session(str(user.id), session_id)
+        else:
+            title = content.strip()[:TITLE_MAX] or "New conversation"
+            session = self.create_session(str(user.id), title)
+
+        user_msg = ChatMessage(
+            session_id=session.id,
+            user_id=user.id,
+            role="user",
+            content=content,
+        )
+        self.db.add(user_msg)
+        self.db.flush()
+
+        history = [
+            {"role": m.role, "content": m.content}
+            for m in self.get_messages(str(user.id), str(session.id))[:-1][-12:]
+        ]
+        context = build_farmer_context(user, self.db, language_hint=language)
+        return session, history, context
+
     def _persist_assistant(
         self, session: ChatSession, content: str, agent_used: str
     ) -> ChatMessage:
@@ -123,10 +170,11 @@ class ChatService:
         return assistant_msg
 
     async def send_message(
-        self, user: User, session_id: str | None, content: str, forced_agent: str | None = None
+        self, user: User, session_id: str | None, content: str,
+        forced_agent: str | None = None, language: str | None = None,
     ) -> tuple[ChatSession, ChatMessage, ChatMessage, dict]:
         """Persist user msg, run agent graph, persist assistant msg."""
-        session, history, context = self._prepare_turn(user, session_id, content)
+        session, history, context = self._prepare_turn_with_lang(user, session_id, content, language)
 
         if forced_agent:
             # Direct-to-agent mode (bypass coordinator routing)
@@ -175,7 +223,8 @@ class ChatService:
         return session, user_msg, assistant_msg, meta
 
     async def stream_message(
-        self, user: User, session_id: str | None, content: str, forced_agent: str | None = None
+        self, user: User, session_id: str | None, content: str,
+        forced_agent: str | None = None, language: str | None = None,
     ):
         """Streaming variant: yields SSE-formatted dicts via the router.
 
@@ -185,7 +234,7 @@ class ChatService:
         with ids so the client can continue the conversation immediately.
         Falls back to non-streaming send_message on any streaming failure.
         """
-        session, history, context = self._prepare_turn(user, session_id, content)
+        session, history, context = self._prepare_turn_with_lang(user, session_id, content, language)
         yield {"type": "meta", "session_id": str(session.id)}
 
         agent_used = forced_agent or "general_advice"
@@ -224,7 +273,7 @@ class ChatService:
             else:
                 # Route first (coordinator is a fast model call), then stream
                 # the specialist's answer with live weather data when relevant.
-                from app.ai.agents import classify_intent, specialist_system_for, stream_specialist_turn
+                from app.ai.agents import classify_intent, stream_specialist_turn
 
                 intent, entities = await classify_intent(context, history, content)
                 agent_used = intent

@@ -76,9 +76,15 @@ treatment: specific, India-available products with dosage where confident (e.g.,
 Always add: "Verify with your local agriculture officer before purchase."
 prevention: 3-5 practical steps.
 spread_risk: how quickly it spreads to neighboring plants/fields.
+alternative_explanations: 1-3 OTHER plausible explanations for the same symptoms
+(nutrient deficiency, water stress, environmental damage...) — the top guess is
+a possibility, never a certainty.
 
 If the image is not a plant, or is too blurry to analyze, say so in disease_name
 ("Unclear image - please retake") and set confidence below 40.
+Never present the diagnosis as certain: the farmer sees "Possible issue: X" with
+your confidence score, so keep the language calibrated ("symptoms consistent
+with...", "may be...").
 
 Return STRICT JSON:
 {
@@ -92,7 +98,8 @@ Return STRICT JSON:
   "cause": str,
   "treatment": str,
   "prevention": str,
-  "spread_risk": str
+  "spread_risk": str,
+  "alternative_explanations": [str, str]
 }"""
 
 WEATHER_AGENT_SYSTEM = """You are an agrometeorologist. You receive a 7-day weather forecast JSON for a \

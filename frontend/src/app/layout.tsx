@@ -8,14 +8,16 @@ import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+  metadataBase: new URL(APP_URL),
   title: {
-    default: "AgriGPT — AI-Powered Farmer Income Optimization",
+    default: "AgriGPT — AI Copilot for Smarter Farming",
     template: "%s | AgriGPT",
   },
   description:
-    "AI crop recommendations, disease detection, profit prediction, market intelligence and an expert AI copilot — built to raise farmer income.",
+    "AgriGPT helps farmers plan crops, estimate farm profitability, analyze crop health, understand market conditions and make smarter farming decisions with AI.",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -24,20 +26,26 @@ export const metadata: Metadata = {
     ],
     apple: "/icon-192.png",
   },
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
-    title: "AgriGPT — AI-Powered Farmer Income Optimization",
+    title: "AgriGPT — AI Copilot for Smarter Farming",
     description:
-      "AI crop recommendations, disease detection, profit prediction, market intelligence and an expert AI copilot for Indian farmers.",
+      "Plan crops, estimate costs and returns, analyze crop health from a photo and understand market conditions — AI-powered decision support for farmers.",
     type: "website",
     siteName: "AgriGPT",
+    url: APP_URL,
     images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "AgriGPT" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "AgriGPT — AI-Powered Farmer Income Optimization",
-    description: "AI crop recommendations, disease detection, market intelligence and an expert AI copilot for Indian farmers.",
+    title: "AgriGPT — AI Copilot for Smarter Farming",
+    description:
+      "Plan crops, estimate profitability, analyze crop health and understand market conditions with AI.",
     images: ["/icon-512.png"],
   },
+  robots: { index: true, follow: true },
 };
 
 export const viewport: Viewport = {

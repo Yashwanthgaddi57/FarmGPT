@@ -4,6 +4,7 @@ import uuid as uuidlib
 from fastapi import APIRouter
 
 from app.core.deps import CurrentUser, DBSession, Pagination
+from app.core.plans_service import check_quota
 from app.models.market_prediction import MarketPrediction
 from app.schemas.ai_features import MarketPredictionRequest
 from app.services.activity_service import log_activity
@@ -39,6 +40,7 @@ async def price_ticker(user: CurrentUser, db: DBSession, crops: str | None = Non
 
 @router.post("/analyze")
 async def analyze(payload: MarketPredictionRequest, user: CurrentUser, db: DBSession):
+    check_quota(db, user, "market_analyses")
     loc = await resolve_location_async(db, user)
     pred = await MarketService(db).analyze(str(user.id), payload, farmer_loc=loc.to_dict())
     log_activity(db, str(user.id), "market.analyzed", "market_prediction", str(pred.id), {"crop": payload.crop})

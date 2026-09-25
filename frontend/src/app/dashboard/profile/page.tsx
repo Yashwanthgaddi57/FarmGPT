@@ -35,8 +35,18 @@ const schema = z.object({
   farm_size_acres: z.coerce.number().min(0),
   soil_type: z.string(),
   water_availability: z.string(),
+  language: z.string(),
 });
 type FormData = z.infer<typeof schema>;
+
+const LANGUAGES = [
+  { value: "en", label: "English" },
+  { value: "te", label: "తెలుగు (Telugu)" },
+  { value: "hi", label: "हिंदी (Hindi)" },
+  { value: "ta", label: "தமிழ் (Tamil)" },
+  { value: "kn", label: "ಕನ್ನಡ (Kannada)" },
+  { value: "mr", label: "मराठी (Marathi)" },
+];
 
 // Leaflet touches `window` on import — load browser-side only.
 const LocationPicker = dynamic(
@@ -51,11 +61,13 @@ export default function ProfilePage() {
   const { toast } = useToast();
   const [soil, setSoil] = React.useState("unknown");
   const [water, setWater] = React.useState("rainfed");
+  const [language, setLanguage] = React.useState("en");
 
   React.useEffect(() => {
     if (profile) {
       setSoil(profile.soil_type);
       setWater(profile.water_availability);
+      setLanguage(profile.language ?? "en");
       reset({
         name: profile.name,
         phone: profile.phone ?? "",
@@ -63,6 +75,7 @@ export default function ProfilePage() {
         district: profile.district ?? "",
         village: profile.village ?? "",
         farm_size_acres: profile.farm_size_acres,
+        language: profile.language ?? "en",
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -78,7 +91,7 @@ export default function ProfilePage() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      await update.mutateAsync({ ...data, soil_type: soil, water_availability: water });
+      await update.mutateAsync({ ...data, soil_type: soil, water_availability: water, language });
       toast({ title: "Profile updated", variant: "success" });
     } catch (e) {
       toast({ title: "Update failed", description: apiErrorMessage(e), variant: "destructive" });
@@ -177,6 +190,17 @@ export default function ProfilePage() {
                 <SelectContent>
                   {WATER.map((w) => (
                     <SelectItem key={w} value={w} className="capitalize">{w}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Preferred language (AI answers)</Label>
+              <Select value={language} onValueChange={setLanguage}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {LANGUAGES.map((l) => (
+                    <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

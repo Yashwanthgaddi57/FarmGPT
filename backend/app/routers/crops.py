@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 
 from app.core.deps import CurrentUser, DBSession, Pagination
+from app.core.plans_service import check_quota
 from app.services.activity_service import log_activity
 from app.services.agent_log_service import log_agent_run
 from app.services.crop_service import CropService
@@ -12,6 +13,7 @@ router = APIRouter(prefix="/crops", tags=["crops"])
 
 @router.post("/recommend")
 async def recommend(payload: CropRecommendationRequest, user: CurrentUser, db: DBSession):
+    check_quota(db, user, "crop_recommendations")
     service = CropService(db)
     rec = await service.recommend(str(user.id), payload)
     log_activity(db, str(user.id), "crop.recommended", "recommendation", str(rec.id), {"location": payload.location})

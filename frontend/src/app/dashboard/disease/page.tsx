@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
-import { Camera, FileScan, Loader2 } from "lucide-react";
+import { Camera, FileScan, Info, Loader2, Stethoscope } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,10 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   useAnalyzeDisease,
   useDiseaseAnalytics,
   useDiseaseReports,
+  useUpdateDiseaseFollowup,
 } from "@/hooks/use-api";
 import { apiErrorMessage } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +28,14 @@ const SEVERITY_VARIANT: Record<string, "success" | "warning" | "danger" | "destr
   critical: "destructive",
 };
 
+const STATUS_OPTIONS = ["open", "monitoring", "treated", "resolved"] as const;
+const STATUS_VARIANT: Record<string, "warning" | "secondary" | "success" | "outline"> = {
+  open: "warning",
+  monitoring: "secondary",
+  treated: "success",
+  resolved: "outline",
+};
+
 export default function DiseasePage() {
   const [file, setFile] = React.useState<File | null>(null);
   const [preview, setPreview] = React.useState<string | null>(null);
@@ -35,6 +44,7 @@ export default function DiseasePage() {
   const analyze = useAnalyzeDisease();
   const { data: reports } = useDiseaseReports(page);
   const { data: analytics } = useDiseaseAnalytics();
+  const updateFollowup = useUpdateDiseaseFollowup();
   const { toast } = useToast();
 
   const onFile = (f: File | null) => {
@@ -48,29 +58,43 @@ export default function DiseasePage() {
       toast({ title: "Missing info", description: "Pick a photo and enter the crop name." });
       return;
     }
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "Image too large",
+        description: "Your image is too large. Please upload a smaller image (max 10MB).",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       await analyze.mutateAsync({ image: file, crop });
       toast({ title: "Analysis complete", variant: "success" });
     } catch (err) {
-      toast({ title: "Analysis failed", description: apiErrorMessage(err), variant: "destructive" });
+      toast({
+        title: "Analysis failed",
+        description: apiErrorMessage(err) || "Something went wrong while analyzing your crop. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
   const latest = analyze.data;
+  const inconclusive = latest && latest.confidence < 40;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Disease Scan</h1>
+        <h1 className="text-2xl font-bold">Crop Health Scan</h1>
         <p className="text-sm text-muted-foreground">
-          Upload a leaf photo — Claude Vision identifies disease, severity and treatment.
+          Upload a crop photo — get possible issues with confidence levels,
+          immediate actions and prevention. AI-assisted, not a diagnosis.
         </p>
       </div>
 
       <Tabs defaultValue="scan">
         <TabsList>
           <TabsTrigger value="scan">Scan</TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="history">My Crop Health</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
@@ -78,7 +102,7 @@ export default function DiseasePage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Camera className="h-4 w-4 text-leaf-600" /> Upload leaf photo
+                <Camera className="h-4 w-4 text-leaf-600" /> Upload crop photo
               </CardTitle>
               <CardDescription>JPEG/PNG/WebP up to 10MB. Clear, well-lit close-ups work best.</CardDescription>
             </CardHeader>
@@ -87,10 +111,14 @@ export default function DiseasePage() {
                 <div
                   className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors hover:border-leaf-400 hover:bg-leaf-50/40"
                   onClick={() => document.getElementById("leaf-input")?.click()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && document.getElementById("leaf-input")?.click()}
+                  aria-label="Select a crop photo"
                 >
                   {preview ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={preview} alt="Leaf preview" className="max-h-48 rounded-lg object-contain" />
+                    <img src={preview} alt="Crop preview" className="max-h-48 rounded-lg object-contain" />
                   ) : (
                     <>
                       <FileScan className="h-10 w-10 text-leaf-500" />
@@ -119,7 +147,7 @@ export default function DiseasePage() {
                   {analyze.isPending ? (
                     <><Loader2 className="h-4 w-4 animate-spin" /> Analyzing image…</>
                   ) : (
-                    <>Scan for disease</>
+                    <>Analyze crop health</>
                   )}
                 </Button>
               </form>
@@ -128,8 +156,8 @@ export default function DiseasePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Diagnosis</CardTitle>
-              <CardDescription>AI assessment with treatment plan</CardDescription>
+              <CardTitle className="text-base">Analysis</CardTitle>
+              <CardDescription>AI assessment — verify with a local expert before treatment</CardDescription>
             </CardHeader>
             <CardContent>
               {!latest && !analyze.isPending && (
@@ -146,12 +174,30 @@ export default function DiseasePage() {
               )}
               {latest && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-bold">{latest.disease_name}</h3>
-                    <Badge variant={latest.is_healthy ? "success" : SEVERITY_VARIANT[latest.severity] ?? "warning"}>
-                      {latest.is_healthy ? "Healthy" : `${latest.severity} severity`}
-                    </Badge>
-                  </div>
+                  {/* Inconclusive state */}
+                  {inconclusive ? (
+                    <div className="rounded-xl border border-amber-300 bg-amber-50/70 p-4 dark:bg-amber-950/20">
+                      <p className="flex items-center gap-2 font-semibold text-amber-700 dark:text-amber-400">
+                        <Info className="h-4 w-4" /> Inconclusive image
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        The image is inconclusive. Please upload a clearer,
+                        well-lit close-up of the affected leaves, or consult an
+                        agronomist for an on-site assessment.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Possible issue</p>
+                        <h3 className="text-lg font-bold">{latest.disease_name}</h3>
+                      </div>
+                      <Badge variant={latest.is_healthy ? "success" : SEVERITY_VARIANT[latest.severity] ?? "warning"}>
+                        {latest.is_healthy ? "Healthy" : `${latest.severity} severity`}
+                      </Badge>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
                       <p className="text-muted-foreground">Crop</p>
@@ -162,17 +208,48 @@ export default function DiseasePage() {
                       <p className="font-medium">{latest.confidence.toFixed(1)}%</p>
                     </div>
                   </div>
+
                   <div>
                     <div className="mb-1 flex justify-between text-xs text-muted-foreground">
                       <span>Severity score</span><span>{latest.severity_score.toFixed(0)}/100</span>
                     </div>
                     <Progress value={latest.severity_score} />
                   </div>
-                  <Section title="Symptoms" body={latest.symptoms} />
+
+                  {!inconclusive && (
+                    <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+                      This is an AI-assisted possibility, not a certain
+                      diagnosis. Similar symptoms can have other causes — see
+                      below. Confirm with your local agriculture officer before
+                      purchasing or applying treatments.
+                    </p>
+                  )}
+
+                  <Section title="Symptoms detected" body={latest.symptoms} />
                   <Section title="Cause" body={latest.cause} />
-                  <Section title="Treatment" body={latest.treatment} />
+
+                  {(latest.alternatives?.length ?? 0) > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        These symptoms may also be associated with
+                      </p>
+                      <ul className="mt-1 list-inside list-disc text-sm text-muted-foreground">
+                        {latest.alternatives!.map((a: string) => <li key={a}>{a}</li>)}
+                      </ul>
+                    </div>
+                  )}
+
+                  <Section title="Immediate actions" body={latest.treatment} />
                   <Section title="Prevention" body={latest.prevention} />
                   <Section title="Spread risk" body={latest.spread_risk} />
+
+                  <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs text-muted-foreground dark:bg-amber-950/20">
+                    <Stethoscope className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                    When to seek expert help: if symptoms spread despite
+                    treatment, or before any chemical treatment on a large
+                    area, consult your local agriculture officer or a licensed
+                    agronomist.
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -198,9 +275,30 @@ export default function DiseasePage() {
                           {r.is_healthy ? "healthy" : r.severity}
                         </Badge>
                       </div>
-                      <p className="text-sm capitalize text-muted-foreground">{r.crop} · {r.confidence.toFixed(0)}%</p>
+                      <p className="text-sm capitalize text-muted-foreground">
+                        {r.crop} · confidence {r.confidence.toFixed(0)}%
+                      </p>
                       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{r.treatment}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{formatDate(r.created_at)}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{formatDate(r.created_at)}</span>
+                        {!r.is_healthy && (
+                          <FollowupControls
+                            reportId={r.id}
+                            status={(r.followup_status ?? "open") as "open" | "monitoring" | "treated" | "resolved"}
+                            notes={r.notes ?? ""}
+                            onSave={(status, notes) =>
+                              updateFollowup.mutate(
+                                { reportId: r.id, followup_status: status, notes },
+                                {
+                                  onSuccess: () => toast({ title: "Follow-up updated", variant: "success" }),
+                                  onError: (e) => toast({ title: "Update failed", description: apiErrorMessage(e), variant: "destructive" }),
+                                }
+                              )
+                            }
+                            saving={updateFollowup.isPending}
+                          />
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -220,14 +318,14 @@ export default function DiseasePage() {
             <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No analytics yet.</CardContent></Card>
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard label="Total scans" value={String(analytics.total_reports)} />
                 <StatCard label="Diseased" value={String(analytics.diseased_count)} />
                 <StatCard label="Healthy" value={String(analytics.healthy_count)} />
-                <StatCard label="Avg confidence" value={`${analytics.avg_confidence.toFixed(0)}%`} />
+                <StatCard label="Open issues" value={String(analytics.open_issues)} />
               </div>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-base">Top diseases detected</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-base">Top possible issues detected</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   {analytics.top_diseases.length === 0 && <p className="text-sm text-muted-foreground">Nothing yet.</p>}
                   {analytics.top_diseases.map((d: { name: string; count: number }) => (
@@ -248,6 +346,66 @@ export default function DiseasePage() {
           )}
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function FollowupControls({
+  reportId,
+  status,
+  notes,
+  onSave,
+  saving,
+}: {
+  reportId: string;
+  status: "open" | "monitoring" | "treated" | "resolved";
+  notes: string;
+  onSave: (status: "open" | "monitoring" | "treated" | "resolved", notes: string) => void;
+  saving: boolean;
+}) {
+  const [value, setValue] = React.useState(status);
+  const [noteText, setNoteText] = React.useState(notes);
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <div className="w-full">
+      <div className="flex items-center gap-2">
+        <Badge variant={STATUS_VARIANT[value] ?? "secondary"}>{value}</Badge>
+        <button
+          className="text-xs text-leaf-600 underline"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
+          {open ? "Hide" : "Update"}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {STATUS_OPTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => setValue(s)}
+                className={`rounded-full border px-2.5 py-1 text-xs capitalize transition-colors ${
+                  value === s ? "border-leaf-500 bg-leaf-50 text-leaf-700" : "text-muted-foreground hover:border-leaf-300"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+          <Textarea
+            rows={2}
+            placeholder="Notes: what did you observe or apply?"
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            maxLength={2000}
+          />
+          <Button size="sm" disabled={saving} onClick={() => onSave(value, noteText)}>
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save follow-up"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

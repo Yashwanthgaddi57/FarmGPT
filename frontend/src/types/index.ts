@@ -73,6 +73,9 @@ export interface DiseaseReport {
   treatment: string | null;
   prevention: string | null;
   spread_risk: string | null;
+  alternatives?: string[] | null;
+  followup_status?: string | null;
+  notes?: string | null;
   created_at: string;
 }
 
@@ -205,6 +208,29 @@ export interface DashboardData {
     precision: string;
     latitude: number;
     longitude: number;
+  };
+  farm?: {
+    farm_size_acres: number;
+    village: string | null;
+    district: string | null;
+    state: string | null;
+    soil_type: string;
+    water_source: string;
+    current_crop: string;
+    current_season: string;
+  };
+  crop_health?: {
+    recent_scans: {
+      id: string;
+      crop: string;
+      disease_name: string;
+      is_healthy: boolean;
+      severity: string;
+      followup_status: string | null;
+      image_url: string | null;
+      created_at: string | null;
+    }[];
+    open_issues: number;
   };
   widgets: {
     current_crop: string;

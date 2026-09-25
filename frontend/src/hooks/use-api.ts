@@ -230,6 +230,21 @@ export function useDiseaseAnalytics() {
   });
 }
 
+export function useUpdateDiseaseFollowup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      reportId: string;
+      followup_status: "open" | "monitoring" | "treated" | "resolved" | null;
+      notes?: string | null;
+    }) => {
+      const { reportId, ...body } = payload;
+      return (await api.patch(`/disease/reports/${reportId}`, body)).data as DiseaseReport;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["disease"] }),
+  });
+}
+
 // ---------------- Profit Predictor ----------------
 export function usePredictProfit() {
   const qc = useQueryClient();
@@ -328,6 +343,7 @@ export function useSendMessage() {
       content: string;
       agent?: string;
       session_id?: string | null;
+      language?: string | null;
     }) => (await api.post("/chat/messages", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["chat"] });
@@ -349,7 +365,7 @@ export function useDeleteChatSession() {
  * the non-streaming endpoint automatically if the stream fails.
  */
 export async function sendMessageStream(
-  payload: { content: string; agent?: string; session_id?: string | null },
+  payload: { content: string; agent?: string; session_id?: string | null; language?: string | null },
   onEvent: (e: { type: string; text?: string; agent?: string; session_id?: string; message_id?: string; message?: string }) => void
 ): Promise<void> {
   const raw = localStorage.getItem("agrisphere-auth");
@@ -425,6 +441,45 @@ export function useMarkNotificationsRead() {
   return useMutation({
     mutationFn: async (ids: string[]) => (await api.post("/notifications/mark-read", { ids })).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+// ---------------- Analytics events (product funnel) ----------------
+export function trackEvent(event: string, metadata?: Record<string, unknown>) {
+  // Fire-and-forget; never block the UI on analytics.
+  api.post("/analytics/events", { event, metadata }).catch(() => undefined);
+}
+
+// ---------------- Subscription ----------------
+export interface PlanInfo {
+  id: string;
+  name: string;
+  price_inr: number;
+  period: string;
+  description: string;
+  features: string[];
+  limits: Record<string, number>;
+  cta?: string;
+  highlight?: boolean;
+}
+
+export function useSubscriptionPlans() {
+  return useQuery<{ plans: PlanInfo[]; payments_enabled: boolean }>({
+    queryKey: ["subscription", "plans"],
+    queryFn: async () => (await api.get("/subscription/plans")).data,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useMySubscription() {
+  return useQuery<{
+    plan: string;
+    meta: { name: string; price_inr: number; features: string[] };
+    limits: Record<string, number>;
+    usage: Record<string, { used: number; limit: number }>;
+  }>({
+    queryKey: ["subscription", "me"],
+    queryFn: async () => (await api.get("/subscription")).data,
   });
 }
 

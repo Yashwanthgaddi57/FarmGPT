@@ -1,6 +1,10 @@
 """Domain exceptions with consistent JSON error contract."""
+import logging
+
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
+
+logger = logging.getLogger("app.errors")
 
 
 class AgriSphereError(Exception):
@@ -53,5 +57,24 @@ async def agrisphere_error_handler(request: Request, exc: AgriSphereError) -> JS
     )
 
 
+# User-friendly copy for unexpected failures. Stack traces stay in the logs.
+_GENERIC_500 = "Something went wrong. Please try again in a moment."
+
+
+async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "InternalServerError",
+                "detail": _GENERIC_500,
+                "path": request.url.path,
+            }
+        },
+    )
+
+
 def register_exception_handlers(app) -> None:
     app.add_exception_handler(AgriSphereError, agrisphere_error_handler)
+    app.add_exception_handler(Exception, unhandled_error_handler)

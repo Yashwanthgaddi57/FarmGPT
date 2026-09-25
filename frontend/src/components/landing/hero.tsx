@@ -2,7 +2,16 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Leaf, LineChart, ScanSearch, Sparkles, Sun } from "lucide-react";
+import {
+  ArrowRight,
+  Camera,
+  LineChart,
+  ScanSearch,
+  Sprout,
+  Wallet,
+  CloudSun,
+  MessageCircle,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,83 +25,158 @@ const fadeUp = {
   }),
 };
 
+// Mock farm-plan summary shown in the hero — illustrative example data,
+// labeled as such so no visitor mistakes it for a performance claim.
+const PLAN_PREVIEW = {
+  crop: "Groundnut",
+  cost: "₹31,200",
+  revenue: "₹58,900",
+  profit: "₹27,700",
+  duration: "110 days",
+  risk: "Medium",
+};
+
 export function Hero() {
   return (
-    <section className="relative overflow-hidden pt-32 pb-20 sm:pt-40 sm:pb-28">
+    <section className="relative overflow-hidden pt-28 pb-16 sm:pt-36 sm:pb-24">
       <div className="grid-pattern absolute inset-0 [mask-image:radial-gradient(ellipse_60%_50%_at_50%_40%,#000,transparent)]" />
       <div className="absolute -top-40 left-1/2 h-[480px] w-[820px] -translate-x-1/2 rounded-full bg-leaf-200/40 blur-3xl" />
 
-      <div className="container relative flex flex-col items-center text-center">
-        <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0}>
-          <Badge variant="success" className="mb-6 gap-1.5 px-3 py-1 text-sm">
-            <Sparkles className="h-3.5 w-3.5" />
-            Powered by Claude AI + 6 specialist agents
-          </Badge>
-        </motion.div>
+      <div className="container relative grid items-center gap-12 lg:grid-cols-2">
+        <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
+          <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0}>
+            <Badge variant="success" className="mb-6 gap-1.5 px-3 py-1 text-sm">
+              <Sprout className="h-3.5 w-3.5" />
+              AI copilot for farmers
+            </Badge>
+          </motion.div>
 
-        <motion.h1
-          variants={fadeUp}
-          initial="hidden"
-          animate="show"
-          custom={1}
-          className="max-w-4xl text-4xl font-extrabold tracking-tight sm:text-6xl"
-        >
-          Maximize every acre with an{" "}
-          <span className="text-gradient">AI copilot for farming</span>
-        </motion.h1>
+          <motion.h1
+            variants={fadeUp}
+            initial="hidden"
+            animate="show"
+            custom={1}
+            className="max-w-2xl text-4xl font-extrabold tracking-tight sm:text-5xl xl:text-6xl"
+          >
+            Your AI Copilot for{" "}
+            <span className="text-gradient">Smarter Farming</span>
+          </motion.h1>
 
-        <motion.p
-          variants={fadeUp}
-          initial="hidden"
-          animate="show"
-          custom={2}
-          className="mt-6 max-w-2xl text-lg text-muted-foreground"
-        >
-          AgriGPT tells you what to plant, predicts your profit before you sow, detects crop
-          diseases from a photo, reads the markets, and watches the weather — so every decision
-          earns more.
-        </motion.p>
+          <motion.p
+            variants={fadeUp}
+            initial="hidden"
+            animate="show"
+            custom={2}
+            className="mt-6 max-w-xl text-lg text-muted-foreground"
+          >
+            Know what to grow. Know what it may cost. Know what you could earn.
+            Know what to do next.
+          </motion.p>
 
-        <motion.div
-          variants={fadeUp}
-          initial="hidden"
-          animate="show"
-          custom={3}
-          className="mt-8 flex flex-col gap-3 sm:flex-row"
-        >
-          <Button size="lg" className="gap-2" asChild>
-            <Link href="/auth/register">
-              Start free <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-          <Button size="lg" variant="outline" asChild>
-            <a href="#how-it-works">See how it works</a>
-          </Button>
-        </motion.div>
+          <motion.div
+            variants={fadeUp}
+            initial="hidden"
+            animate="show"
+            custom={3}
+            className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row"
+          >
+            <Button size="lg" className="gap-2" asChild>
+              <Link href="/auth/register">
+                Plan My Farm <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button size="lg" variant="outline" className="gap-2" asChild>
+              <Link href="/auth/register">
+                <Camera className="h-4 w-4" /> Analyze My Crop
+              </Link>
+            </Button>
+          </motion.div>
 
-        {/* Floating feature cards */}
+          <motion.p
+            variants={fadeUp}
+            initial="hidden"
+            animate="show"
+            custom={4}
+            className="mt-6 max-w-lg text-xs leading-relaxed text-muted-foreground"
+          >
+            AgriGPT provides AI-generated estimates and decision support — not
+            guarantees. Verify high-stakes decisions with your local
+            agriculture officer.
+          </motion.p>
+        </div>
+
+        {/* Mock farm-plan summary card */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.5 }}
-          className="relative mt-16 grid w-full max-w-4xl grid-cols-2 gap-4 sm:grid-cols-4"
+          transition={{ duration: 0.7, delay: 0.35 }}
+          className="relative mx-auto w-full max-w-md"
         >
-          {[
-            { icon: LineChart, label: "+38% avg. profit uplift", color: "bg-leaf-500" },
-            { icon: ScanSearch, label: "99% disease detection", color: "bg-amber-500" },
-            { icon: Sun, label: "7-day weather intelligence", color: "bg-sky-500" },
-            { icon: Leaf, label: "50+ crops supported", color: "bg-earth-500" },
-          ].map(({ icon: Icon, label, color }) => (
-            <div
-              key={label}
-              className="flex flex-col items-center gap-3 rounded-xl border bg-card p-5 shadow-sm"
-            >
-              <span className={`flex h-10 w-10 items-center justify-center rounded-lg text-white ${color}`}>
-                <Icon className="h-5 w-5" />
+          <div className="rounded-2xl border bg-card p-5 shadow-xl shadow-leaf-600/10 sm:p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Example farm plan
+                </p>
+                <p className="text-lg font-bold">2.5 acres · Kharif</p>
+              </div>
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-leaf-600 text-white">
+                <Sprout className="h-5 w-5" />
               </span>
-              <span className="text-sm font-medium text-muted-foreground">{label}</span>
             </div>
-          ))}
+
+            <div className="mb-4 rounded-xl border border-leaf-200 bg-leaf-50/60 p-4 dark:bg-leaf-950/20">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold capitalize">{PLAN_PREVIEW.crop}</span>
+                <Badge variant="warning" className="text-[10px]">
+                  Risk: {PLAN_PREVIEW.risk}
+                </Badge>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-[10px] uppercase text-muted-foreground">Est. cost</p>
+                  <p className="text-sm font-bold">{PLAN_PREVIEW.cost}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-muted-foreground">Est. revenue</p>
+                  <p className="text-sm font-bold">{PLAN_PREVIEW.revenue}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-muted-foreground">Est. profit</p>
+                  <p className="text-sm font-bold text-leaf-700">{PLAN_PREVIEW.profit}</p>
+                </div>
+              </div>
+              <p className="mt-2 text-[10px] text-muted-foreground">
+                AI-generated estimate · {PLAN_PREVIEW.duration} duration · based on provided inputs
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <ScanSearch className="h-3.5 w-3.5 text-amber-500" /> Crop health scans
+              </span>
+              <span className="flex items-center gap-1.5">
+                <LineChart className="h-3.5 w-3.5 text-leaf-600" /> Market prices
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CloudSun className="h-3.5 w-3.5 text-sky-500" /> Weather alerts
+              </span>
+              <span className="flex items-center gap-1.5">
+                <MessageCircle className="h-3.5 w-3.5 text-leaf-600" /> Copilot in your language
+              </span>
+            </div>
+          </div>
+
+          {/* floating accent card */}
+          <motion.div
+            initial={{ opacity: 0, x: 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.7 }}
+            className="absolute -bottom-5 -left-4 hidden rounded-xl border bg-card p-3 shadow-lg sm:flex sm:items-center sm:gap-2"
+          >
+            <Wallet className="h-4 w-4 text-leaf-600" />
+            <span className="text-xs font-medium">Profit calculator, built in</span>
+          </motion.div>
         </motion.div>
       </div>
     </section>

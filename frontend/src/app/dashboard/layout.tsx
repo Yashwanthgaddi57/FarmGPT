@@ -6,6 +6,8 @@ import * as React from "react";
 import {
   Bell,
   BellRing,
+  Calculator,
+  Crown,
   LayoutDashboard,
   Leaf,
   LineChart,
@@ -41,14 +43,17 @@ import { cn, formatDate } from "@/lib/utils";
 
 const nav = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/dashboard/plan", label: "Plan My Farm", icon: Sprout },
   { href: "/dashboard/crops", label: "Crop Advisor", icon: Leaf },
   { href: "/dashboard/disease", label: "Disease Scan", icon: ScanSearch },
   { href: "/dashboard/profit", label: "Profit Predictor", icon: Wallet },
+  { href: "/dashboard/profit-calculator", label: "Profit Calculator", icon: Calculator },
   { href: "/dashboard/market", label: "Market Intelligence", icon: TrendingUp },
   { href: "/dashboard/weather", label: "Weather", icon: LineChart },
   { href: "/dashboard/vendors", label: "Vendors Near Me", icon: Store },
   { href: "/dashboard/copilot", label: "AI Copilot", icon: MessageSquareHeart },
   { href: "/dashboard/analytics", label: "Analytics", icon: Sparkles },
+  { href: "/dashboard/subscription", label: "Subscription", icon: Crown },
 ];
 
 function NotificationBell() {

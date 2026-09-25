@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  Activity,
-  BrainCircuit,
+  BadgeCheck,
   Check,
   CloudSun,
+  Info,
   LineChart,
   MessageSquareHeart,
   ScanSearch,
@@ -52,12 +52,38 @@ function SectionHeading({
   );
 }
 
-// ---------------- Benefits ----------------
+// ---------------- Trust / Value ----------------
 const benefits = [
-  { icon: TrendingUp, title: "Earn more per acre", text: "Farmers using data-driven crop choice report 25-40% higher net income than regional averages." },
-  { icon: Wallet, title: "Cut input waste", text: "AI-tuned fertilizer, water and pesticide plans reduce input costs by up to 20%." },
-  { icon: ScanSearch, title: "Stop disease early", text: "Photo-based detection catches infections days before visible spread, saving entire harvests." },
-  { icon: LineChart, title: "Sell at the right time", text: "Market forecasts tell you whether to sell now or wait — with confidence scores." },
+  {
+    icon: Sprout,
+    title: "Compare crops before planting",
+    text: "See estimated costs, returns, duration and risks side by side for your soil, water and budget — before you spend.",
+  },
+  {
+    icon: Wallet,
+    title: "Estimate profit transparently",
+    text: "A clear calculator shows total cost, expected revenue and break-even price. Change any assumption and see it update.",
+  },
+  {
+    icon: ScanSearch,
+    title: "Check crop symptoms early",
+    text: "Upload a leaf photo for an AI-assisted analysis of possible issues, with confidence levels and alternative explanations.",
+  },
+  {
+    icon: LineChart,
+    title: "Understand market conditions",
+    text: "Mandi prices with source and timestamp, price trends, and sell/wait guidance when data is available.",
+  },
+  {
+    icon: CloudSun,
+    title: "Farm-aware weather",
+    text: "7-day forecasts translated into irrigation, spraying and harvest timing suggestions for your location.",
+  },
+  {
+    icon: MessageSquareHeart,
+    title: "Copilot in your language",
+    text: "Ask in English, Hindi, Telugu, Tamil, Kannada or Marathi — by text or voice. Answers use your saved farm context.",
+  },
 ];
 
 export function Benefits() {
@@ -66,10 +92,10 @@ export function Benefits() {
       <div className="container">
         <SectionHeading
           eyebrow="Why AgriGPT"
-          title={<>Built to raise <span className="text-gradient">farmer income</span></>}
-          subtitle="Every feature maps to one metric: net profit at harvest."
+          title={<>Decision support for <span className="text-gradient">every farm decision</span></>}
+          subtitle="AI-powered estimates to help you plan — always verify high-stakes decisions with local experts."
         />
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {benefits.map((b, i) => (
             <motion.div
               key={b.title}
@@ -98,12 +124,12 @@ export function Benefits() {
 
 // ---------------- Features ----------------
 const features = [
-  { icon: Sprout, title: "Crop Recommendation Engine", text: "Five best crops for your soil, water, budget and season — ranked by expected profit with risk and confidence scores." },
-  { icon: ScanSearch, title: "AI Disease Detection", text: "Upload a leaf photo; Claude Vision identifies the disease, severity, treatment and prevention plan." },
-  { icon: Wallet, title: "Profit Predictor", text: "Best, average and worst-case scenarios for yield, revenue and ROI before you spend a rupee." },
-  { icon: TrendingUp, title: "Market Intelligence", text: "Weekly, monthly and quarterly price trends with demand/supply forecasts and sell/wait guidance." },
-  { icon: CloudSun, title: "Weather Intelligence", text: "Seven-day agro-meteorology: plant, irrigate, harvest or delay — with alerts for heat, frost and storms." },
-  { icon: MessageSquareHeart, title: "AI Farm Copilot", text: "Chat in your language with an advisor that knows your farm, history and latest reports." },
+  { icon: Sprout, title: "Plan My Farm", text: "A guided workflow: describe your farm, get ranked crop options with estimated cost, revenue, profit, duration and water needs — clearly labeled as estimates." },
+  { icon: ScanSearch, title: "Crop Health", text: "Upload a photo; get possible issues with confidence levels, alternative explanations, immediate actions and prevention steps. Track follow-ups in My Crop Health." },
+  { icon: Wallet, title: "Profit Calculator", text: "Transparent math — not a black box. Total cost, expected production, revenue, gross profit per acre and break-even price." },
+  { icon: TrendingUp, title: "Market Intelligence", text: "Mandi prices with source, unit and last-updated date. Compare nearby markets where data supports it; clearly flagged when data is unavailable." },
+  { icon: CloudSun, title: "Weather Intelligence", text: "Real forecast data (Open-Meteo) with agro-context: when to irrigate, spray or harvest — clearly separated from AI recommendations." },
+  { icon: MessageSquareHeart, title: "AI Farm Copilot", text: "Chat or speak in your language. The copilot knows your farm profile, recent scans and market views — no need to repeat yourself." },
 ];
 
 export function Features() {
@@ -112,8 +138,8 @@ export function Features() {
       <div className="container">
         <SectionHeading
           eyebrow="Features"
-          title={<>Six AI agents, <span className="text-gradient">one platform</span></>}
-          subtitle="Specialist agents coordinated by an orchestrator that routes every question to the right expert."
+          title={<>One platform, <span className="text-gradient">every decision</span></>}
+          subtitle="Farm data + weather + market prices + crop knowledge + AI reasoning — combined into actionable guidance."
         />
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {features.map((f, i) => (
@@ -144,10 +170,10 @@ export function Features() {
 
 // ---------------- How It Works ----------------
 const steps = [
-  { n: "01", title: "Tell us about your farm", text: "District, soil, water source, size and budget. Takes two minutes." },
-  { n: "02", title: "Get your AI crop plan", text: "Five ranked crop options with profit, risk and duration projections." },
-  { n: "03", title: "Grow with guardrails", text: "Photo-based disease scans, weather alerts and irrigation advice all season." },
-  { n: "04", title: "Sell at the perfect time", text: "Market forecasts tell you when to hold and when to sell for maximum price." },
+  { n: "01", title: "Tell us about your farm", text: "Location, soil, water, size and budget. Takes two minutes." },
+  { n: "02", title: "AgriGPT analyzes it", text: "Ranked crop options with estimated costs, returns and risks for your conditions." },
+  { n: "03", title: "Act on recommendations", text: "Plan planting, track crop health, watch the weather and check market prices." },
+  { n: "04", title: "Track your farm", text: "Crop health history, profit estimates and daily suggestions — all season long." },
 ];
 
 export function HowItWorks() {
@@ -156,7 +182,7 @@ export function HowItWorks() {
       <div className="container">
         <SectionHeading
           eyebrow="How it works"
-          title={<>From data to <span className="text-gradient">harvest income</span></>}
+          title={<>From farm data to <span className="text-gradient">better decisions</span></>}
         />
         <div className="relative grid gap-8 md:grid-cols-4">
           <div className="absolute left-0 right-0 top-6 hidden h-px bg-gradient-to-r from-transparent via-leaf-400 to-transparent md:block" />
@@ -184,13 +210,15 @@ export function HowItWorks() {
 }
 
 // ---------------- Pricing ----------------
+// Single source of truth is GET /api/v1/subscription/plans (backend/app/core/plans.py).
+// This landing-page mirror lists only features that exist today; keep in sync.
 const plans = [
   {
     name: "Kisan Free",
     price: "₹0",
     period: "forever",
     description: "Core AI tools for smallholders.",
-    features: ["5 crop recommendations / month", "10 disease scans / month", "Weather intelligence", "AI Copilot (20 messages/day)"],
+    features: ["5 crop plans / month", "10 disease scans / month", "Weather intelligence", "AI Copilot (20 messages/day)", "Profit calculator"],
     cta: "Start free",
     highlight: false,
   },
@@ -199,16 +227,16 @@ const plans = [
     price: "₹299",
     period: "per month",
     description: "For serious growers who want every edge.",
-    features: ["Unlimited crop recommendations", "Unlimited disease scans", "Market intelligence + forecasts", "Profit predictor with scenarios", "Priority AI Copilot", "Email alerts"],
+    features: ["Unlimited crop plans", "Unlimited disease scans + health history", "Market intelligence & sell/wait guidance", "AI Copilot (unlimited)", "Priority support queue"],
     cta: "Go Pro",
     highlight: true,
   },
   {
-    name: "Cooperative",
+    name: "Cooperative / FPO",
     price: "₹4,999",
     period: "per month",
     description: "For FPOs, NGOs and agri-program teams.",
-    features: ["Up to 100 farmer seats", "Admin dashboard & agent logs", "Bulk disease scanning", "Custom crop playbooks", "API access", "Dedicated support"],
+    features: ["Everything in Pro for each member", "Multi-farmer organization dashboard*", "Aggregated analytics & reports*", "Bulk disease scanning*", "Admin controls*"],
     cta: "Contact sales",
     highlight: false,
   },
@@ -221,7 +249,7 @@ export function Pricing() {
         <SectionHeading
           eyebrow="Pricing"
           title={<>Priced like a <span className="text-gradient">bag of seed</span>, not an enterprise SaaS</>}
-          subtitle="One good sell decision pays for a year of Pro."
+          subtitle="One good sell decision can pay for a year of Pro. Prices in INR, inclusive of all taxes where applicable."
         />
         <div className="grid gap-6 lg:grid-cols-3">
           {plans.map((p, i) => (
@@ -262,11 +290,52 @@ export function Pricing() {
                     variant={p.highlight ? "default" : "outline"}
                     asChild
                   >
-                    <Link href="/auth/register">{p.cta}</Link>
+                    <Link href={p.highlight ? "/auth/register?plan=pro" : "/auth/register"}>{p.cta}</Link>
                   </Button>
                 </CardContent>
               </Card>
             </motion.div>
+          ))}
+        </div>
+        <p className="mx-auto mt-8 flex max-w-2xl items-start gap-2 text-center text-xs text-muted-foreground">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            * Organization features are in development — contact us for early access.
+            Online payments are being integrated; Pro activation is currently handled
+            by our team.
+          </span>
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// ---------------- Product demo ----------------
+export function ProductDemo() {
+  const shots = [
+    { title: "Plan My Farm", body: "Guided farm profile → ranked crop options → your farm plan with estimated cost, revenue and profit.", icon: Sprout },
+    { title: "Crop Health", body: "Photo scan → possible issue with confidence → actions, prevention and follow-up tracking.", icon: ScanSearch },
+    { title: "Profit Calculator", body: "Transparent cost breakdown → break-even price → best/average/worst scenarios.", icon: Wallet },
+    { title: "Market Intelligence", body: "Live mandi prices with source and timestamp → trends → sell/wait guidance.", icon: LineChart },
+  ];
+  return (
+    <section id="demo" className="border-b bg-leaf-50/50 py-24 dark:bg-leaf-950/10">
+      <div className="container">
+        <SectionHeading
+          eyebrow="Inside the product"
+          title={<>See how a <span className="text-gradient">farm decision</span> comes together</>}
+        />
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {shots.map((s) => (
+            <Card key={s.title} className="h-full">
+              <CardContent className="pt-6">
+                <span className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-leaf-600/10 text-leaf-700">
+                  <s.icon className="h-6 w-6" />
+                </span>
+                <h3 className="mb-2 font-semibold">{s.title}</h3>
+                <p className="text-sm text-muted-foreground">{s.body}</p>
+              </CardContent>
+            </Card>
           ))}
         </div>
       </div>
@@ -274,52 +343,26 @@ export function Pricing() {
   );
 }
 
-// ---------------- Testimonials ----------------
-const testimonials = [
-  {
-    quote: "The crop recommendation switched me from soybean to gram that season. My profit per acre nearly doubled — ₹58,000 more.",
-    name: "Ramesh Patil",
-    role: "5-acre farm, Nashik, Maharashtra",
-  },
-  {
-    quote: "I caught leaf rust two weeks early from one photo. The treatment plan saved my entire wheat field.",
-    name: "Sukhwinder Singh",
-    role: "12-acre farm, Ludhiana, Punjab",
-  },
-  {
-    quote: "Our FPO uses the market forecast for 80 families' sell decisions. The wait-two-weeks advice added ₹4 lakh last onion season.",
-    name: "Lakshmi Reddy",
-    role: "Secretary, Kurnool FPO, Andhra Pradesh",
-  },
-];
-
-export function Testimonials() {
+// ---------------- Safety / Disclaimer ----------------
+export function Safety() {
   return (
-    <section className="border-y bg-leaf-50/50 py-24 dark:bg-leaf-950/10">
-      <div className="container">
-        <SectionHeading eyebrow="Testimonials" title={<>Farmers <span className="text-gradient">grow with us</span></>} />
-        <div className="grid gap-6 md:grid-cols-3">
-          {testimonials.map((t, i) => (
-            <motion.div
-              key={t.name}
-              variants={reveal}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.08 }}
-            >
-              <Card className="h-full">
-                <CardContent className="flex h-full flex-col pt-6">
-                  <p className="flex-1 text-sm leading-relaxed">“{t.quote}”</p>
-                  <div className="mt-6 border-t pt-4">
-                    <p className="font-semibold text-sm">{t.name}</p>
-                    <p className="text-xs text-muted-foreground">{t.role}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
+    <section className="py-16">
+      <div className="container max-w-3xl">
+        <Card className="border-amber-200 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/20">
+          <CardContent className="flex items-start gap-3 py-5">
+            <Info className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div className="text-sm leading-relaxed text-muted-foreground">
+              <p className="mb-1 font-semibold text-foreground">Important</p>
+              AgriGPT provides AI-generated estimates and decision-support
+              suggestions. Crop plans, profit projections and disease
+              analyses are <strong>not guarantees</strong> — actual results
+              depend on weather, soil, pests, market conditions and farming
+              practices. For pesticides and chemical treatments, always follow
+              the product label and confirm with your local agriculture
+              officer or a licensed agronomist before high-stakes decisions.
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </section>
   );
@@ -327,18 +370,19 @@ export function Testimonials() {
 
 // ---------------- FAQ ----------------
 const faqs = [
-  { q: "Is AgriGPT free to use?", a: "Yes — the Kisan Free plan includes monthly crop recommendations, disease scans, weather intelligence and limited AI copilot chats, forever. Pro unlocks unlimited usage and market forecasts." },
-  { q: "Which crops are supported?", a: "50+ major Indian crops across cereals, pulses, oilseeds, vegetables, fruits and spices — from wheat, rice and cotton to tomato, onion, turmeric and mango." },
-  { q: "How accurate is disease detection?", a: "Claude Vision identifies common crop diseases with 90-99% confidence on clear photos. Every report includes confidence scores, and treatment advice recommends verification with your local agriculture officer." },
-  { q: "Do you sell my farm data?", a: "Never. Your data is stored in your own isolated workspace, protected by row-level security, and used only to improve your own recommendations." },
-  { q: "Does it work in my language?", a: "The AI copilot replies in English, Hindi, Hinglish and major Indian languages. The interface is English today, with more languages coming." },
+  { q: "Is AgriGPT free to use?", a: "Yes — the Kisan Free plan includes monthly crop plans, disease scans, weather intelligence, the profit calculator and limited copilot chats, free forever. Pro removes the usage limits and adds market intelligence features." },
+  { q: "Are the profit numbers guaranteed?", a: "No. All cost, revenue and profit figures are AI-generated estimates based on the inputs you provide and typical conditions for your area. Actual results depend on weather, pests, soil, market prices and farming practices. Treat them as decision support, not promises." },
+  { q: "How reliable is disease detection?", a: "The AI reports a confidence level with every analysis and lists alternative explanations for the same symptoms. Low-confidence scans are flagged as inconclusive. Always confirm important diagnoses with your local agriculture officer before buying treatments." },
+  { q: "Where do market prices come from?", a: "Live prices come from India's Agmarknet APMC feed (via data.gov.in) and always show the source, unit and last-updated date. When live data is unavailable, AgriGPT says so rather than making up numbers." },
+  { q: "Does it work in my language?", a: "The copilot answers in English, Hindi, Telugu, Tamil, Kannada and Marathi — and you can ask questions by voice. The interface is English today with more coming." },
   { q: "What do I need to get started?", a: "Just a phone. Register, describe your farm, and the AI starts working. No sensors, no hardware, no setup cost." },
+  { q: "Do you sell my farm data?", a: "No. Your farm data is stored in your own account, protected by row-level security, and used only to improve your own recommendations." },
 ];
 
 export function FAQ() {
   const [openIdx, setOpenIdx] = React.useState<number | null>(0);
   return (
-    <section id="faq" className="py-24">
+    <section id="faq" className="pb-24">
       <div className="container max-w-3xl">
         <SectionHeading eyebrow="FAQ" title={<>Questions, <span className="text-gradient">answered</span></>} />
         <div className="space-y-3">
@@ -348,6 +392,7 @@ export function FAQ() {
                 <button
                   className="flex w-full items-center justify-between p-5 text-left font-medium"
                   onClick={() => setOpenIdx(openIdx === i ? null : i)}
+                  aria-expanded={openIdx === i}
                 >
                   {f.q}
                   <span className={cn("ml-4 transition-transform", openIdx === i && "rotate-45")}>+</span>
@@ -377,7 +422,7 @@ export function Footer() {
             AgriGPT
           </div>
           <p className="text-sm text-leaf-200/80">
-            AI-powered income optimization for every farmer.
+            AI-powered decision support for every farmer.
           </p>
         </div>
         <div>
@@ -393,7 +438,16 @@ export function Footer() {
           <ul className="space-y-2 text-sm text-leaf-200/80">
             <li><a href="#how-it-works" className="hover:text-white">How it works</a></li>
             <li><a href="#faq" className="hover:text-white">FAQ</a></li>
-            <li><a href="/docs" className="hover:text-white">API docs</a></li>
+            <li>
+              <a
+                href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/docs`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 hover:text-white"
+              >
+                API docs <BadgeCheck className="h-3 w-3" />
+              </a>
+            </li>
           </ul>
         </div>
         <div>
@@ -405,7 +459,7 @@ export function Footer() {
         </div>
       </div>
       <div className="container mt-10 border-t border-leaf-900 pt-6 text-center text-xs text-leaf-300/60">
-        © {new Date().getFullYear()} AgriGPT. Built with Claude, LangGraph and ❤ for farmers.
+        © {new Date().getFullYear()} AgriGPT. AI-generated estimates are decision support, not guarantees.
       </div>
     </footer>
   );

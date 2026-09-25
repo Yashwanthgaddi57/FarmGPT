@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Bot, Loader2, Send, Trash2, User } from "lucide-react";
+import { Bot, Loader2, Mic, MicOff, Send, Trash2, User, Volume2, VolumeX } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,11 +15,13 @@ import {
   useSendMessage,
   sendMessageStream,
 } from "@/hooks/use-api";
+import { trackEvent } from "@/hooks/use-api";
 import type { ChatMessage } from "@/types";
 import { cn, formatDate } from "@/lib/utils";
+import { useLang } from "@/lib/i18n";
 
 const SUGGESTIONS = [
-  "What crop should I grow this season for maximum profit?",
+  "What crop should I grow this season?",
   "How do I reduce fertilizer costs without hurting yield?",
   "When is the best time to sell my onion harvest?",
   "My tomato leaves are curling — what should I do?",
@@ -37,6 +39,34 @@ const AGENT_LABELS: Record<string, string> = {
   advisor: "Farm Advisor",
 };
 
+/* Minimal typings for the Web Speech API (not in TS DOM lib by default). */
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((e: unknown) => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+function getSpeechRecognition(): SpeechRecognitionCtor | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as Record<string, unknown>;
+  return (w.SpeechRecognition || w.webkitSpeechRecognition) as SpeechRecognitionCtor | null;
+}
+
+const SPEECH_LOCALES: Record<string, string> = {
+  en: "en-IN",
+  hi: "hi-IN",
+  te: "te-IN",
+  ta: "ta-IN",
+  kn: "kn-IN",
+  mr: "mr-IN",
+};
+
 export default function CopilotPage() {
   const { data: sessions } = useChatSessions();
   const [sessionId, setSessionId] = React.useState<string | null>(null);
@@ -45,6 +75,15 @@ export default function CopilotPage() {
   const deleteSession = useDeleteChatSession();
   const [input, setInput] = React.useState("");
   const bottomRef = React.useRef<HTMLDivElement>(null);
+  const { lang } = useLang();
+
+  // Voice input
+  const [listening, setListening] = React.useState(false);
+  const recognitionRef = React.useRef<SpeechRecognitionLike | null>(null);
+  const speechSupported = React.useMemo(() => Boolean(getSpeechRecognition()), []);
+
+  // Text-to-speech
+  const [ttsEnabled, setTtsEnabled] = React.useState(false);
 
   // Optimistic display: server messages + pending user message + streaming answer
   const [pending, setPending] = React.useState<ChatMessage[]>([]);
@@ -55,6 +94,49 @@ export default function CopilotPage() {
   React.useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, pending, streamText]);
+
+  const speak = React.useCallback(
+    (text: string) => {
+      if (!ttsEnabled || typeof window === "undefined" || !window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(
+        // Strip markdown symbols for cleaner speech.
+        text.replace(/[*_#`>|]/g, "").slice(0, 1200)
+      );
+      utterance.lang = SPEECH_LOCALES[lang] ?? "en-IN";
+      window.speechSynthesis.speak(utterance);
+      trackEvent("tts_used");
+    },
+    [ttsEnabled, lang]
+  );
+
+  const toggleListening = () => {
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
+    const Ctor = getSpeechRecognition();
+    if (!Ctor) {
+      return;
+    }
+    const recognition = new Ctor();
+    recognition.lang = SPEECH_LOCALES[lang] ?? "en-IN";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (e) => {
+      const transcript = e.results?.[0]?.[0]?.transcript ?? "";
+      if (transcript) {
+        setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        trackEvent("voice_input_used");
+      }
+    };
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => setListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
+  };
 
   const doSend = async (text: string) => {
     const content = text.trim();
@@ -73,9 +155,10 @@ export default function CopilotPage() {
     setIsStreaming(true);
 
     let liveSessionId = sessionId;
+    let finalText = "";
     try {
       await sendMessageStream(
-        { content, session_id: sessionId },
+        { content, session_id: sessionId, language: lang },
         (e) => {
           if (e.type === "meta" && e.session_id) {
             liveSessionId = e.session_id;
@@ -83,13 +166,14 @@ export default function CopilotPage() {
           } else if (e.type === "agent" && e.agent) {
             setStreamAgent(e.agent);
           } else if (e.type === "delta" && e.text) {
+            finalText += e.text;
             setStreamText((prev) => prev + e.text);
           } else if (e.type === "done") {
-            // Persisted server-side; refetch and clear transient state.
             if (!liveSessionId && e.session_id) setSessionId(e.session_id);
           }
         }
       );
+      speak(finalText);
     } catch {
       /* stream + fallback both failed; keep UI consistent */
     } finally {
@@ -159,6 +243,24 @@ export default function CopilotPage() {
       {/* Chat pane */}
       <Card className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
         <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+          {/* Toolbar */}
+          <div className="flex items-center justify-between border-b px-4 py-2">
+            <span className="text-xs text-muted-foreground">
+              Replies in your selected language ({lang.toUpperCase()})
+            </span>
+            <button
+              onClick={() => setTtsEnabled((v) => !v)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                ttsEnabled ? "border-leaf-500 bg-leaf-50 text-leaf-700" : "text-muted-foreground"
+              )}
+              aria-pressed={ttsEnabled}
+            >
+              {ttsEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+              {ttsEnabled ? "Voice replies on" : "Voice replies off"}
+            </button>
+          </div>
+
           {/* Messages */}
           <div className="flex-1 space-y-4 overflow-y-auto p-4">
             {all.length === 0 && (
@@ -169,8 +271,8 @@ export default function CopilotPage() {
                 <div>
                   <h3 className="font-semibold">Your AI Farm Copilot</h3>
                   <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                    Backed by six specialist agents — crop, disease, weather, market, profit and advisor —
-                    coordinated automatically. Ask anything about your farm.
+                    Ask by text or 🎤 voice — it knows your farm profile, recent
+                    scans and market views. Type, speak, or pick a suggestion.
                   </p>
                 </div>
                 <div className="grid w-full max-w-lg gap-2 sm:grid-cols-2">
@@ -211,7 +313,18 @@ export default function CopilotPage() {
                   {m.role === "user" ? (
                     <div className="whitespace-pre-wrap text-sm leading-relaxed">{m.content}</div>
                   ) : (
-                    <Markdown>{m.content}</Markdown>
+                    <>
+                      <Markdown>{m.content}</Markdown>
+                      {ttsEnabled && (
+                        <button
+                          onClick={() => speak(m.content)}
+                          className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                          aria-label="Read answer aloud"
+                        >
+                          <Volume2 className="h-3 w-3" /> Listen
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
                 {m.role === "user" && (
@@ -262,10 +375,23 @@ export default function CopilotPage() {
               }}
               className="flex items-end gap-2"
             >
+              {speechSupported && (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={listening ? "default" : "outline"}
+                  onClick={toggleListening}
+                  aria-label={listening ? "Stop listening" : "Ask by voice"}
+                  title={listening ? "Stop listening" : "Ask by voice"}
+                  className={cn(listening && "animate-pulse")}
+                >
+                  {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                </Button>
+              )}
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about crops, disease, prices, weather…"
+                placeholder={listening ? "Listening… speak now" : "Ask about crops, disease, prices, weather…"}
                 rows={1}
                 className="max-h-32 min-h-[44px] resize-none"
                 onKeyDown={(e) => {
@@ -279,6 +405,9 @@ export default function CopilotPage() {
                 <Send className="h-4 w-4" />
               </Button>
             </form>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              AI answers are decision support — verify high-stakes decisions with local experts.
+            </p>
           </div>
         </CardContent>
       </Card>

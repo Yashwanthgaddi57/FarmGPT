@@ -127,27 +127,30 @@ def init_db() -> None:
     except Exception as e:
         logger.warning("Schema check failed (%s) — assuming provisioned", e)
         return
-    if tables:
+    if not tables:
+        logger = logging.getLogger("app.db")
+        logger.warning("Database is empty — creating schema from models (run schema.sql/alembic for the canonical DDL)")
+        from app.models import (  # noqa: F401  (register mappers)
+            Activity,
+            AgentLog,
+            ChatMessage,
+            ChatSession,
+            DiseaseReport,
+            Farm,
+            MarketPrediction,
+            Notification,
+            ProfitPrediction,
+            Recommendation,
+            User,
+            WeatherRecord,
+        )
+        Base.metadata.create_all(bind=engine)
+        logger.info("Created initial database schema")
         return
 
-    logger = logging.getLogger("app.db")
-    logger.warning("Database is empty — creating schema from models (run schema.sql/alembic for the canonical DDL)")
-    from app.models import (  # noqa: F401  (register mappers)
-        Activity,
-        AgentLog,
-        ChatMessage,
-        ChatSession,
-        DiseaseReport,
-        Farm,
-        MarketPrediction,
-        Notification,
-        ProfitPrediction,
-        Recommendation,
-        User,
-        WeatherRecord,
-    )
-    Base.metadata.create_all(bind=engine)
-    logger.info("Created initial database schema")
+    # Schema exists: apply additive-only auto-migrations so deploys never
+    # break auth on a schema drift (e.g. new users.plan column).
+    _auto_migrate_postgres(engine, logger)
 
 
 def init_local_db() -> None:
@@ -204,6 +207,49 @@ def _auto_migrate_sqlite(engine, logger) -> None:
                 )
                 logger.info("Auto-migrated: added %s.%s", table_name, col.name)
         conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Postgres additive auto-migrations (startup, idempotent)
+# ---------------------------------------------------------------------------
+# Only ever ADDs columns. Canonical DDL stays in alembic + supabase/schema.sql;
+# this is a deploy-time safety net so a new build never 500s on a missing
+# column (e.g. users.plan) before `alembic upgrade head` is run by hand.
+_PG_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
+    "users": {
+        # NOT NULL DEFAULT backfills existing rows instantly on PG 11+.
+        "plan": "VARCHAR(20) NOT NULL DEFAULT 'free'",
+    },
+    "disease_reports": {
+        "alternatives": "JSONB",
+        "followup_status": "VARCHAR(30)",
+        "notes": "TEXT",
+    },
+}
+
+
+def _auto_migrate_postgres(engine, logger) -> None:
+    import sqlalchemy
+
+    try:
+        with engine.connect() as conn:
+            inspector = sqlalchemy.inspect(engine)
+            for table_name, cols in _PG_ADDITIVE_COLUMNS.items():
+                if not inspector.has_table(table_name):
+                    continue
+                existing = {c["name"] for c in inspector.get_columns(table_name)
+                            if c.get("name")}
+                for col_name, ddl in _PG_ADDITIVE_COLUMNS[table_name].items():
+                    if col_name in existing:
+                        continue
+                    conn.exec_driver_sql(
+                        f'ALTER TABLE "{table_name}" ADD COLUMN "{col_name}" {ddl}'
+                    )
+                    logger.info("Auto-migrated: added %s.%s", table_name, col_name)
+            conn.commit()
+    except Exception as e:
+        # Never block startup on migration failure — log loudly instead.
+        logger.error("Postgres auto-migration failed: %s", e)
 
 
 def get_db() -> Generator[Session, None, None]:

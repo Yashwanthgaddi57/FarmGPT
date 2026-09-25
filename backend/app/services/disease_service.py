@@ -104,8 +104,38 @@ class DiseaseService:
             treatment=data.get("treatment"),
             prevention=data.get("prevention"),
             spread_risk=data.get("spread_risk"),
+            alternatives=data.get("alternative_explanations") or data.get("alternatives"),
+            followup_status="open" if not data.get("is_healthy") else None,
             model=settings.ANTHROPIC_MODEL,
         )
+        self.db.add(report)
+        self.db.flush()
+        return report
+
+    def update_followup(
+        self,
+        user_id: str,
+        report_id: str,
+        followup_status: str | None = None,
+        notes: str | None = None,
+    ) -> DiseaseReport:
+        """Farmer-owned follow-up updates (Crop Health workflow)."""
+        report = (
+            self.db.query(DiseaseReport)
+            .filter(
+                DiseaseReport.id == uuid.UUID(report_id),
+                DiseaseReport.user_id == uuid.UUID(user_id),
+            )
+            .first()
+        )
+        if not report:
+            from app.core.exceptions import NotFoundError
+
+            raise NotFoundError("Report not found")
+        if followup_status is not None:
+            report.followup_status = followup_status
+        if notes is not None:
+            report.notes = notes
         self.db.add(report)
         self.db.flush()
         return report

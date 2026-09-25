@@ -6,7 +6,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, fun
 from app.core.database import GUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import Base
+from app.core.database import Base, JSONType
 
 
 class DiseaseReport(Base):
@@ -28,6 +28,9 @@ class DiseaseReport(Base):
     treatment: Mapped[str | None] = mapped_column(Text)
     prevention: Mapped[str | None] = mapped_column(Text)
     spread_risk: Mapped[str | None] = mapped_column(Text)
+    alternatives: Mapped[list | None] = mapped_column(JSONType)  # alternative explanations
+    followup_status: Mapped[str | None] = mapped_column(String(30))  # open | monitoring | treated | resolved
+    notes: Mapped[str | None] = mapped_column(Text)  # farmer's own follow-up notes
     model: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

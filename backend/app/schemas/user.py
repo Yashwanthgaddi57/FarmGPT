@@ -40,6 +40,7 @@ class ProfileOut(UUIDCoercionMixin):
     language: str
     avatar_url: str | None
     role: str
+    plan: str = "free"
     onboarding_completed: bool
     created_at: datetime
 

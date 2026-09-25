@@ -21,7 +21,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAnalyzeMarket, useMarketPredictions } from "@/hooks/use-api";
+import {
+  useAnalyzeMarket,
+  useMarketPredictions,
+  useNearbyMandis,
+} from "@/hooks/use-api";
 import { apiErrorMessage } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate, formatINR } from "@/lib/utils";
@@ -41,6 +45,10 @@ export default function MarketPage() {
 
   const [crop, setCrop] = React.useState("");
   const [market, setMarket] = React.useState("");
+  const result = analyze.data;
+
+  // "Where should I sell?" — nearest mandis for the analyzed crop
+  const { data: mandis } = useNearbyMandis(result?.crop || undefined);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,8 +59,6 @@ export default function MarketPage() {
       toast({ title: "Analysis failed", description: apiErrorMessage(err), variant: "destructive" });
     }
   };
-
-  const result = analyze.data;
 
   return (
     <div className="space-y-6">
@@ -180,6 +186,44 @@ export default function MarketPage() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Where should I sell? */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Where should I sell?</CardTitle>
+                  <CardDescription>
+                    Nearest APMC mandis for {result.crop} — call ahead or visit the mandi for today&apos;s actual rates.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {!mandis || mandis.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Save your farm location in your{" "}
+                      <a href="/dashboard/profile" className="text-leaf-600 underline">profile</a>{" "}
+                      to see nearby mandis.
+                    </p>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {mandis.map((m) => (
+                        <div key={m.id} className="rounded-lg border p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate font-medium">{m.name}</p>
+                            <Badge variant="secondary" className="shrink-0 text-[10px]">
+                              {m.distance_km} km
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{m.district ?? "—"}</p>
+                          {m.major_crops.length > 0 && (
+                            <p className="mt-1 text-[11px] capitalize text-muted-foreground">
+                              {m.major_crops.slice(0, 4).join(", ")}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </>
           )}
         </TabsContent>

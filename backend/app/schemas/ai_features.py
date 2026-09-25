@@ -56,10 +56,18 @@ class DiseaseReportResponse(UUIDCoercionMixin):
     treatment: str | None
     prevention: str | None
     spread_risk: str | None
+    alternatives: list[str] | None = None
+    followup_status: str | None = None
+    notes: str | None = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class DiseaseFollowupUpdate(BaseModel):
+    followup_status: Literal["open", "monitoring", "treated", "resolved"] | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 # ---------------- Profit Prediction ----------------
@@ -165,6 +173,7 @@ class ChatMessageCreate(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
     agent: str | None = None  # optional explicit agent routing
     session_id: str | None = None  # continue an existing conversation
+    language: str | None = Field(default=None, max_length=10)  # ISO code hint: en|hi|te|ta|kn|mr
 
 
 class ChatMessageOut(UUIDCoercionMixin):

@@ -14,6 +14,7 @@ from app.routers import (
     notifications,
     profit,
     push,
+    subscription,
     users,
     weather,
 )
@@ -31,5 +32,6 @@ api_router.include_router(weather.router)
 api_router.include_router(chat.router)
 api_router.include_router(notifications.router)
 api_router.include_router(analytics.router)
+api_router.include_router(subscription.router)
 api_router.include_router(admin.router)
 api_router.include_router(push.router)

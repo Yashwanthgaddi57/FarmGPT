@@ -28,6 +28,7 @@ class User(Base):
     language: Mapped[str] = mapped_column(String(10), default="en")
     avatar_url: Mapped[str | None] = mapped_column(Text)
     role: Mapped[str] = mapped_column(String(30), default="farmer")
+    plan: Mapped[str] = mapped_column(String(20), default="free")  # free | pro | cooperative
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

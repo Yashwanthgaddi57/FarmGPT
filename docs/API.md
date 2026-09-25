@@ -127,6 +127,40 @@ Each crop item: `{crop_name, investment_inr, expected_revenue_inr, expected_prof
 | GET | `/admin/agent-logs` | `{items, total, page, page_size}` — LangGraph observability |
 | GET | `/admin/users/{user_id}/agent-logs` | `{items, total, ...}` |
 
+## Subscription & Plans
+
+| Method | Path | Response |
+|---|---|---|
+| GET | `/subscription/plans` | `{plans: [{id, name, price_inr, period, description, features, limits}], payments_enabled}` — public pricing source of truth |
+| GET | `/subscription` | `{plan, meta, limits, usage: {feature: {used, limit}}}` (auth) |
+| POST | `/subscription/checkout` | `501` until a payment provider is integrated — never fakes success |
+
+Plan limits are enforced server-side on `POST /crops/recommend`,
+`/disease/analyze`, `/market/analyze`, `/profit/predict` (monthly) and
+`/chat/messages[/stream]` (daily). Exceeding a limit returns **429** with an
+upgrade hint. Limits/config live in `backend/app/core/plans.py` only.
+
+## Disease follow-up
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| PATCH | `/disease/reports/{id}` | `{followup_status?: open\|monitoring\|treated\|resolved, notes?: str}` | `DiseaseReport` |
+
+Reports may include `alternatives` (other plausible explanations),
+`followup_status` and farmer `notes`. Confidence < 40 is an inconclusive scan.
+
+## Analytics events
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/analytics/events` | `{event, metadata?}` | `{tracked}` — allowlist-only funnel events |
+
+## Chat extras
+
+`POST /chat/messages` and `/chat/messages/stream` accept an optional
+`language` hint (`en|hi|te|ta|kn|mr`). The reply language is chosen from this
+hint, falling back to the profile language.
+
 ## System
 
 | Method | Path | Response |

@@ -4,6 +4,7 @@ import uuid as uuidlib
 from fastapi import APIRouter
 
 from app.core.deps import CurrentUser, DBSession, Pagination
+from app.core.plans_service import check_quota
 from app.models.profit_prediction import ProfitPrediction
 from app.schemas.ai_features import ProfitPredictionRequest
 from app.services.activity_service import log_activity
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/profit", tags=["profit"])
 
 @router.post("/predict")
 async def predict(payload: ProfitPredictionRequest, user: CurrentUser, db: DBSession):
+    check_quota(db, user, "profit_predictions")
     pred = await ProfitService(db).predict(str(user.id), payload)
     log_activity(db, str(user.id), "profit.predicted", "profit_prediction", str(pred.id), {"crop": payload.crop})
     return pred
