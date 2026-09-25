@@ -37,15 +37,18 @@ def _supabase_msg(resp: httpx.Response) -> str:
 
 
 def _service_key_ok() -> bool:
-    """True when SUPABASE_SERVICE_KEY looks like a real service-role JWT.
+    """True when SUPABASE_SERVICE_KEY looks like a real service-role secret.
 
-    Supabase service-role keys are 3-segment JWTs. The render.yaml default is
-    the placeholder 'your-service-role-key' (no dots), which the admin API
-    rejects with 'invalid JWT'. Detect that and fall back to the anon signup
-    path instead of breaking signup when the secret isn't configured.
+    Supabase service-role keys come in two forms: the modern 3-segment JWT
+    (eyJ...) and the legacy sb_secret_... string. The render.yaml default is
+    the placeholder 'your-service-role-key', which the admin API rejects with
+    'invalid JWT'. Detect that and fall back to the anon signup path instead
+    of breaking signup when the secret isn't configured.
     """
-    key = settings.SUPABASE_SERVICE_KEY or ""
-    return bool(key) and "your" not in key.lower() and key.count(".") == 2
+    key = (settings.SUPABASE_SERVICE_KEY or "").strip()
+    if not key or "your" in key.lower():
+        return False
+    return key.count(".") == 2 or key.startswith("sb_secret_")
 
 
 def _normalize_session(resp_json: dict) -> dict:
@@ -141,9 +144,11 @@ async def supabase_sign_up(email: str, password: str, metadata: dict | None = No
     `metadata` is stored as user_metadata so get_current_user can hydrate the
     full profile on the first authenticated request.
     """
+    key = (settings.SUPABASE_SERVICE_KEY or "").strip()
+    legacy = key.startswith("sb_secret_")
     admin_headers = {
-        "apikey": settings.SUPABASE_ANON_KEY,
-        "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}",
+        "apikey": key if legacy else settings.SUPABASE_ANON_KEY,
+        "Authorization": f"Bearer {key}",
     }
     anon_headers = {"apikey": settings.SUPABASE_ANON_KEY}
     user_data = metadata or {}
@@ -202,14 +207,16 @@ async def admin_get_user_by_email(email: str) -> dict | None:
     Returns the raw admin user object, or None if not found / lookup fails
     (lookup failure must never block the standard error path).
     """
+    key = (settings.SUPABASE_SERVICE_KEY or "").strip()
+    legacy = key.startswith("sb_secret_")
     try:
         async with httpx.AsyncClient(base_url=settings.SUPABASE_URL, timeout=15) as client:
             resp = await client.get(
                 "/auth/v1/admin/users",
                 params={"per_page": 200},
                 headers={
-                    "apikey": settings.SUPABASE_SERVICE_KEY,
-                    "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}",
+                    "apikey": key if legacy else settings.SUPABASE_ANON_KEY,
+                    "Authorization": f"Bearer {key}",
                 },
             )
             if resp.status_code != 200:
