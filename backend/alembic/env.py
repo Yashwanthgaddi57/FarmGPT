@@ -9,8 +9,14 @@ from app.core.database import Base
 from app.models import *  # noqa: F401,F403 - register all models
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.SUPABASE_DB_URL)
 
+# NOTE: we do NOT call config.set_main_option("sqlalchemy.url", ...) here.
+# Python's configparser uses BasicInterpolation by default, which rejects '%'
+# in values — and the Supabase transaction pooler URL contains %40 (the
+# URL-encoded '@'). That raised
+#   ValueError: invalid interpolation syntax in '...%40...' at position 61
+# and crashed the build. Inject the URL directly into both migration modes
+# instead of writing it through the .ini parser.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
@@ -30,7 +36,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        {"sqlalchemy.url": settings.SUPABASE_DB_URL},
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
