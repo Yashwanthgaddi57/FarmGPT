@@ -11,6 +11,16 @@ export type Lang = "en" | "hi" | "te" | "ta" | "kn" | "mr";
 
 const DICT: Record<Exclude<Lang, "en">, Record<string, string>> = {
   hi: {
+    // Bottom navigation + mobile chrome
+    Home: "होम",
+    Farm: "खेत",
+    Health: "सेहत",
+    Copilot: "सहायक",
+    More: "और",
+    "All pages": "सभी पेज",
+    "My Farm": "मेरा खेत",
+    "Ask AgriGPT": "अग्रीजीपीटी से पूछें",
+    "Farm Log": "खेत दैनिकी",
     Overview: "अवलोकन",
     "Crop Advisor": "फसल सलाहकार",
     "Plan My Farm": "मेरा खेत योजना",
@@ -30,6 +40,16 @@ const DICT: Record<Exclude<Lang, "en">, Record<string, string>> = {
     "No notifications yet.": "अभी कोई सूचना नहीं।",
   },
   te: {
+    // Bottom navigation + mobile chrome
+    Home: "హోమ్",
+    Farm: "పొలం",
+    Health: "పంట ఆరోగ్యం",
+    Copilot: "సహాయకుడు",
+    More: "మరిన్ని",
+    "All pages": "అన్ని పేజీలు",
+    "My Farm": "నా పొలం",
+    "Ask AgriGPT": "అగ్రిజీపీటీని అడగండి",
+    "Farm Log": "పొలం నిర్వహణ",
     Overview: "అవలోకనం",
     "Crop Advisor": "పంట సలహాదారు",
     "Plan My Farm": "నా పొలం ప్రణాళిక",
@@ -49,6 +69,16 @@ const DICT: Record<Exclude<Lang, "en">, Record<string, string>> = {
     "No notifications yet.": "ఇంకా నోటిఫికేషన్లు లేవు.",
   },
   ta: {
+    // Bottom navigation + mobile chrome
+    Home: "முகப்பு",
+    Farm: "பண்ணை",
+    Health: "பயிர் நலம்",
+    Copilot: "உதவியாளர்",
+    More: "மேலும்",
+    "All pages": "அனைத்து பக்கங்கள்",
+    "My Farm": "என் பண்ணை",
+    "Ask AgriGPT": "அக்ரிஜிபிடியிடம் கேளுங்கள்",
+    "Farm Log": "பண்ணை பதிவேடு",
     Overview: "மேலோட்டம்",
     "Crop Advisor": "பயிர் ஆலோசகர்",
     "Plan My Farm": "என் பண்ணை திட்டம்",
@@ -68,6 +98,16 @@ const DICT: Record<Exclude<Lang, "en">, Record<string, string>> = {
     "No notifications yet.": "இன்னும் அறிவிப்புகள் இல்லை.",
   },
   kn: {
+    // Bottom navigation + mobile chrome
+    Home: "ಮುಖಪುಟ",
+    Farm: "ಜಮೀನು",
+    Health: "ಬೆಳೆ ಆರೋಗ್ಯ",
+    Copilot: "ಸಹಾಯಕ",
+    More: "ಇನ್ನಷ್ಟು",
+    "All pages": "ಎಲ್ಲಾ ಪುಟಗಳು",
+    "My Farm": "ನನ್ನ ಜಮೀನು",
+    "Ask AgriGPT": "ಅಗ್ರಿಜಿಪಿಟಿಯನ್ನು ಕೇಳಿ",
+    "Farm Log": "ಜಮೀನು ದಿನಚರಿ",
     Overview: "ಅವಲೋಕನ",
     "Crop Advisor": "ಬೆಳೆ ಸಲಹೆಗಾರ",
     "Plan My Farm": "ನನ್ನ ಜಮೀನು ಯೋಜನೆ",
@@ -87,6 +127,16 @@ const DICT: Record<Exclude<Lang, "en">, Record<string, string>> = {
     "No notifications yet.": "ಇನ್ನೂ ಅಧಿಸೂಚನೆಗಳಿಲ್ಲ.",
   },
   mr: {
+    // Bottom navigation + mobile chrome
+    Home: "मुख्यपृष्ठ",
+    Farm: "शेत",
+    Health: "पीक आरोग्य",
+    Copilot: "सहाय्यक",
+    More: "अधिक",
+    "All pages": "सर्व पृष्ठे",
+    "My Farm": "माझे शेत",
+    "Ask AgriGPT": "अ‍ॅग्रिजीपीटीला विचारा",
+    "Farm Log": "शेत डायरी",
     Overview: "आढावा",
     "Crop Advisor": "पीक सल्लागार",
     "Plan My Farm": "माझ्या शेताची योजना",

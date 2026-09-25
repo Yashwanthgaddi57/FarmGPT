@@ -70,9 +70,9 @@ export default function MarketPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Market Intelligence</h1>
+        <h1 className="text-2xl font-bold">Market Prices</h1>
         <p className="text-sm text-muted-foreground">
-          Price trends, demand forecasts and AI sell/wait guidance per crop.
+          Latest prices, trends and AI sell/wait guidance per crop.
         </p>
       </div>
 
@@ -111,7 +111,7 @@ export default function MarketPage() {
 
           {result && (
             <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <KpiCard label="Current Price" value={`${formatINR(result.current_price)}/q`} />
                 <KpiCard
                   label="Weekly Trend"

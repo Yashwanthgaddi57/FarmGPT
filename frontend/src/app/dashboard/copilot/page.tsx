@@ -21,10 +21,12 @@ import { cn, formatDate } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
 
 const SUGGESTIONS = [
-  "What crop should I grow this season?",
-  "How do I reduce fertilizer costs without hurting yield?",
-  "When is the best time to sell my onion harvest?",
-  "My tomato leaves are curling — what should I do?",
+  "🌱 What should I do today?",
+  "🌧️ Will rain affect my crop?",
+  "💰 Should I sell now?",
+  "🐛 What is wrong with my plant?",
+  "💧 When should I irrigate?",
+  "🌾 What crop should I grow this season?",
 ];
 
 const AGENT_LABELS: Record<string, string> = {
@@ -276,12 +278,12 @@ export default function CopilotPage() {
                       : "🎤 Voice input isn't supported in this browser — type your question instead. It knows your farm profile, recent scans and market views."}
                   </p>
                 </div>
-                <div className="grid w-full max-w-lg gap-2 sm:grid-cols-2">
+                <div className="grid w-full max-w-lg gap-2">
                   {SUGGESTIONS.map((s) => (
                     <button
                       key={s}
                       onClick={() => doSend(s)}
-                      className="rounded-lg border p-3 text-left text-sm transition-colors hover:border-leaf-400 hover:bg-leaf-50/50"
+                      className="min-h-[44px] rounded-lg border p-3 text-left text-sm transition-colors hover:border-leaf-400 hover:bg-leaf-50/50"
                     >
                       {s}
                     </button>
@@ -343,7 +345,7 @@ export default function CopilotPage() {
                 </span>
                 <div className="flex items-center gap-2 rounded-2xl border bg-card px-4 py-3 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Agents are thinking…
+                  AgriGPT is thinking…
                 </div>
               </div>
             )}
@@ -384,9 +386,9 @@ export default function CopilotPage() {
                   onClick={toggleListening}
                   aria-label={listening ? "Stop listening" : "Ask by voice"}
                   title={listening ? "Stop listening" : "Ask by voice"}
-                  className={cn(listening && "animate-pulse")}
+                  className={cn("h-12 w-12 shrink-0 md:h-11 md:w-11", listening && "animate-pulse")}
                 >
-                  {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  {listening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
                 </Button>
               )}
               <Textarea
@@ -402,8 +404,14 @@ export default function CopilotPage() {
                   }
                 }}
               />
-              <Button type="submit" size="icon" disabled={send.isPending || isStreaming || !input.trim()}>
-                <Send className="h-4 w-4" />
+              <Button
+                type="submit"
+                size="icon"
+                disabled={send.isPending || isStreaming || !input.trim()}
+                className="h-12 w-12 shrink-0 md:h-11 md:w-11"
+                aria-label="Send question"
+              >
+                <Send className="h-5 w-5" />
               </Button>
             </form>
             <p className="mt-1.5 text-[11px] text-muted-foreground">

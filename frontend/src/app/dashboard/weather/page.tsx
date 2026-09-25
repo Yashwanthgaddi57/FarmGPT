@@ -59,11 +59,11 @@ export default function WeatherPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="space-y-3">
         <div>
-          <h1 className="text-2xl font-bold">Weather Intelligence</h1>
+          <h1 className="text-2xl font-bold">Weather</h1>
           <p className="text-sm text-muted-foreground">
-            Agro-meteorology for your farm: {data?.location ?? "…"}
+            Forecast for your farm: {data?.location ?? "…"}
           </p>
         </div>
         <form onSubmit={search} className="flex gap-2">
@@ -71,9 +71,10 @@ export default function WeatherPage() {
             placeholder="Change location…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            className="w-48"
+            className="min-w-0 flex-1 sm:w-48 sm:flex-none"
+            aria-label="Location"
           />
-          <Button type="submit" variant="outline">Update</Button>
+          <Button type="submit" variant="outline" className="shrink-0">Update</Button>
         </form>
       </div>
 

@@ -34,6 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { MobileBottomNav } from "@/components/dashboard/mobile-nav";
 import { useAuth } from "@/contexts/auth-context";
 import {
   useMarkNotificationsRead,
@@ -75,7 +76,7 @@ function NotificationBell() {
             if (ids.length) markRead.mutate(ids);
           }
         }}
-        className="relative rounded-full p-2 hover:bg-accent"
+        className="relative rounded-full p-2.5 hover:bg-accent"
         aria-label="Notifications"
       >
         {unread > 0 ? <BellRing className="h-5 w-5 text-leaf-600" /> : <Bell className="h-5 w-5" />}
@@ -220,8 +221,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <NotificationBell />
           </div>
         </header>
-        <main className="flex-1 p-4 sm:p-6">{children}</main>
+        <main className="flex-1 p-4 pb-24 sm:p-6 lg:pb-6">{children}</main>
       </div>
+
+      {/* Mobile bottom navigation — primary actions 1 tap away (prompt §4) */}
+      <MobileBottomNav pathname={pathname} />
     </div>
   );
 }

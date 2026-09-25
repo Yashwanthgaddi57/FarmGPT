@@ -359,7 +359,39 @@ function CompareTab() {
           <CardDescription>Latest profit estimate vs your recorded reality</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* Mobile-first: card list instead of a horizontal-scroll table (§21) */}
+          <div className="space-y-2 md:hidden">
+            {rows.map((r) => {
+              const diff = r.est != null && r.act != null ? r.act - r.est : null;
+              return (
+                <div key={r.label} className="rounded-lg border p-3">
+                  <p className="font-medium">{r.label}</p>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Est.</p>
+                      <p>{r.est != null ? r.fmt(r.est) : "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Actual</p>
+                      <p>{r.act != null ? r.fmt(r.act) : "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Diff</p>
+                      <p className={`font-semibold ${diff == null ? "" : diff >= 0 ? "text-leaf-700" : "text-red-600"}`}>
+                        {diff != null ? `${diff >= 0 ? "+" : ""}${r.fmt(Math.abs(diff))}` : "—"}
+                      </p>
+                    </div>
+                  </div>
+                  {diff != null && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">{diff >= 0 ? "▲ above" : "▼ below"} estimate</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop: keep the full table */}
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
