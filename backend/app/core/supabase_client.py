@@ -26,22 +26,94 @@ def get_admin_client():
     return _admin
 
 
+def _supabase_msg(resp: httpx.Response) -> str:
+    """Extract Supabase's human-readable error message from a response."""
+    if resp.headers.get("content-type", "").startswith("application/json"):
+        try:
+            return resp.json().get("msg", resp.text)
+        except Exception:
+            pass
+    return resp.text
+
+
 async def supabase_sign_up(email: str, password: str, metadata: dict | None = None) -> dict:
-    """Create auth user via Supabase Auth API. Returns session/user payload."""
+    """Create an auth user and return a live access session.
+
+    The user is created via the service-role admin API with the email already
+    confirmed, then a session is issued via the password grant. This sends NO
+    confirmation email: on Supabase's free tier the email-confirmation signup
+    path is aggressively rate-limited ("email rate limit exceeded"), which
+    blocks manual account creation entirely. Admin create + password grant are
+    not email-based, so signup works reliably and the user is signed in at once.
+
+    `metadata` is stored as `user_metadata` so `get_current_user` can hydrate
+    the full profile on the first authenticated request.
+    """
+    admin_headers = {
+        "apikey": settings.SUPABASE_ANON_KEY,
+        "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}",
+    }
+    anon_headers = {"apikey": settings.SUPABASE_ANON_KEY}
+    user_data = metadata or {}
+
     async with httpx.AsyncClient(base_url=settings.SUPABASE_URL, timeout=30) as client:
-        resp = await client.post(
-            "/auth/v1/signup",
-            headers={"apikey": settings.SUPABASE_ANON_KEY},
+        # 1) Create the user, confirmed — via the admin API (no email sent).
+        create = await client.post(
+            "/auth/v1/admin/users",
+            headers=admin_headers,
             json={
                 "email": email,
                 "password": password,
-                "data": metadata or {},
+                "email_confirm": True,
+                "user_metadata": user_data,
             },
         )
-        if resp.status_code >= 400:
-            detail = resp.json().get("msg", resp.text) if resp.headers.get("content-type", "").startswith("application/json") else resp.text
-            raise RuntimeError(detail)
-        return resp.json()
+        if create.status_code >= 400:
+            # Allow retries against accounts created by earlier deploys.
+            if "already registered" not in _supabase_msg(create).lower():
+                raise RuntimeError(_supabase_msg(create))
+
+        # 2) Mint a session via the password grant. The user is confirmed, so
+        #    no confirmation email is sent -> immune to the email rate limit.
+        session = await client.post(
+            "/auth/v1/token?grant_type=password",
+            headers=anon_headers,
+            json={"email": email, "password": password},
+        )
+        if session.status_code >= 400 and "confirm" in _supabase_msg(session).lower():
+            # An older deploy may have left the account unconfirmed. Confirm it
+            # via the admin API and retry the password grant once.
+            await _mark_email_confirmed(client, admin_headers, email)
+            session = await client.post(
+                "/auth/v1/token?grant_type=password",
+                headers=anon_headers,
+                json={"email": email, "password": password},
+            )
+        if session.status_code >= 400:
+            raise RuntimeError(_supabase_msg(session))
+        return session.json()
+
+
+async def _mark_email_confirmed(client: httpx.AsyncClient, admin_headers: dict, email: str) -> None:
+    """Best-effort: confirm an existing user found by email. Never raises."""
+    try:
+        listed = await client.get(
+            "/auth/v1/admin/users",
+            headers=admin_headers,
+            params={"email": email},
+        )
+        if listed.status_code != 200:
+            return
+        for u in listed.json().get("users", []):
+            if (u.get("email") or "").lower() == email.lower():
+                await client.put(
+                    f"/auth/v1/admin/users/{u['id']}",
+                    headers=admin_headers,
+                    json={"email_confirm": True},
+                )
+                return
+    except Exception:
+        pass
 
 
 async def supabase_sign_in(email: str, password: str) -> dict:

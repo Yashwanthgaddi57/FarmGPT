@@ -33,7 +33,12 @@ logger = logging.getLogger("app.api.auth")
 
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
-    """Create an auth user. Local mode: immediately active. Supabase: email confirmation."""
+    """Create an auth user. Local mode: immediately active.
+
+    Production uses the Supabase admin API to create the user confirmed and
+    mints a session via the password grant, so signup returns tokens directly
+    (no confirmation email — see supabase_sign_up for the rate-limit rationale).
+    """
     if local_auth_enabled():
         try:
             user = register_local_user(db, payload.model_dump())
@@ -54,12 +59,25 @@ async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         "district": payload.district,
         "state": payload.state,
         "village": payload.village,
+        "farm_size_acres": payload.farm_size_acres,
+        "soil_type": payload.soil_type,
+        "water_availability": payload.water_availability,
     }
     try:
-        await supabase_sign_up(payload.email, payload.password, metadata)
+        session = await supabase_sign_up(payload.email, payload.password, metadata)
     except Exception as e:
         raise AuthError(str(e)) from e
-    return {"message": "Registration successful. Please check your email to confirm your account."}
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content={
+            "message": "Registration successful.",
+            "access_token": session["access_token"],
+            "refresh_token": session["refresh_token"],
+            "expires_in": session.get("expires_in", 3600),
+            "token_type": session.get("token_type", "bearer"),
+            "user": session.get("user", {}),
+        },
+    )
 
 
 @router.post("/login")

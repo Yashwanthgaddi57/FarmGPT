@@ -48,6 +48,9 @@ def get_current_user(
             district=meta.get("district"),
             state=meta.get("state"),
             village=meta.get("village"),
+            farm_size_acres=meta.get("farm_size_acres") or 0,
+            soil_type=meta.get("soil_type") or "unknown",
+            water_availability=meta.get("water_availability") or "rainfed",
         )
         db.add(user)
         db.flush()
