@@ -14,6 +14,7 @@ Three tiers, ALL evaluated (not gated on the previous one finding results):
 Cached 24h per (area, ring); fail-soft: on Overpass failure we return [] and
 the curated directory still answers the request.
 """
+import asyncio
 import logging
 import re
 from typing import Any

@@ -105,7 +105,7 @@ async def nearby_vendors(
 
     # Crop matches get a small priority WITHIN the sort (never enough to cross
     # a 2 km band), so they surface early without lying about real distance.
-    merged.sort(key=lambda v: v["distance_km"] - (2.0 if v["matches_crop"] else 0.0))
+    merged.sort(key=lambda v: v["distance_km"] - (1.99 if v["matches_crop"] else 0.0))
 
     within = [v for v in merged if v["raw_distance_km"] <= radius_km]
     if within:
