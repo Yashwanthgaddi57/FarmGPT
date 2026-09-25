@@ -86,3 +86,36 @@ services:
       # Redis later and set REDIS_URL to share cache + rate limits.
       - key: REDIS_URL
         sync: false
+
+  # ── Frontend (Next.js 15) ──
+  - type: web
+    name: agrigpt-web-v2
+    runtime: node
+    repo: https://github.com/Yashwanthgaddi57/FarmGPT
+    branch: main
+    plan: free
+    region: singapore
+    rootDir: frontend
+    # next.config.mjs uses output:"standalone" — copy static assets into the
+    # standalone bundle and boot the canonical standalone server.
+    buildCommand: "npm install && npm run build && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static"
+    startCommand: node .next/standalone/server.js
+    healthCheckPath: /
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: HOSTNAME
+        value: 0.0.0.0
+      # NEXT_PUBLIC_* vars are inlined at BUILD time — values are prompted
+      # before the first build (sync:false).
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      # Backend base URL — the live API service (no /api/v1 suffix).
+      - key: NEXT_PUBLIC_API_URL
+        value: https://farmgpt-2.onrender.com
+      # This frontend's own URL — used for OAuth redirect targets.
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://agrigpt-web-v2.onrender.com

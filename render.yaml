@@ -112,9 +112,9 @@ services:
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
         sync: false
-      # Backend base URL — the API service above (no /api/v1 suffix).
+      # Backend base URL — the live API service (no /api/v1 suffix).
       - key: NEXT_PUBLIC_API_URL
-        value: https://agrigpt-api-v2.onrender.com
+        value: https://farmgpt-2.onrender.com
       # This frontend's own URL — used for OAuth redirect targets.
       - key: NEXT_PUBLIC_APP_URL
         value: https://agrigpt-web-v2.onrender.com
